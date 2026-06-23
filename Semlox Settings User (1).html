@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Settings</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+[data-theme="dark"]{
+  --bg:#04060f;--sidebar:#080c1a;--sb-bdr:rgba(255,255,255,0.06);
+  --card:rgba(255,255,255,0.03);--card-b:rgba(255,255,255,0.08);--card-hover:rgba(255,255,255,0.055);
+  --text:#f1f5f9;--text2:#cbd5e1;--muted:#64748b;--faint:#1e293b;
+  --input-bg:rgba(255,255,255,0.04);--input-b:rgba(255,255,255,0.1);
+  --divider:rgba(255,255,255,0.06);--scrollbar:#1e293b;
+}
+[data-theme="light"]{
+  --bg:#f1f5f9;--sidebar:#080c1a;--sb-bdr:rgba(255,255,255,0.06);
+  --card:#ffffff;--card-b:rgba(0,0,0,0.08);--card-hover:#f8fafc;
+  --text:#0f172a;--text2:#1e293b;--muted:#64748b;--faint:#e2e8f0;
+  --input-bg:#ffffff;--input-b:rgba(0,0,0,0.1);
+  --divider:rgba(0,0,0,0.07);--scrollbar:#cbd5e1;
+}
+:root{--blue:#3b82f6;--cyan:#06b6d4;--teal:#00d4aa;--orange:#f97316;--red:#ef4444;--amber:#f59e0b;--green:#10b981;--purple:#8b5cf6;}
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;transition:background 0.25s,color 0.25s}
+[data-theme="dark"] body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(59,130,246,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.04) 1px,transparent 1px);background-size:52px 52px}
+.shell{position:relative;z-index:1;display:flex;height:100vh;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:224px;flex-shrink:0;display:flex;flex-direction:column;background:#080c1a;border-right:1px solid rgba(255,255,255,0.06)}
+.sb-logo{height:60px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.sb-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:#fff;font-size:14px}
+.sb-name{font-size:15px;font-weight:700;letter-spacing:-0.02em;color:#f1f5f9}
+.sb-name em{background:linear-gradient(135deg,#3b82f6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:normal}
+.sb-tag{font-size:9px;color:#64748b;font-family:'Space Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;margin-top:1px}
+.sb-body{flex:1;overflow-y:auto;padding:10px 0}
+.sb-sec{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;padding:8px 18px 4px;opacity:0.6}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;margin:1px 8px;border-radius:8px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;transition:all 0.15s;border:1px solid transparent;position:relative;text-decoration:none}
+.nav-item:hover{background:rgba(255,255,255,0.04);color:#cbd5e1}
+.nav-item.active{background:rgba(59,130,246,0.1);color:#f1f5f9;border-color:rgba(59,130,246,0.2)}
+.nav-item.active::before{content:'';position:absolute;left:-4px;top:25%;bottom:25%;width:2px;border-radius:2px;background:linear-gradient(180deg,#3b82f6,#06b6d4)}
+.nav-icon{width:15px;height:15px;flex-shrink:0;opacity:0.6;display:flex}
+.nav-item.active .nav-icon{opacity:1;color:#3b82f6}
+.nav-badge{margin-left:auto;font-size:9px;font-family:'Space Mono',monospace;padding:2px 6px;border-radius:8px;background:rgba(59,130,246,0.15);color:#3b82f6}
+.sb-div{height:1px;background:rgba(255,255,255,0.06);margin:6px 10px}
+.sb-plan{margin:6px 8px;padding:12px;border-radius:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15)}
+.sb-plan-name{font-size:11px;font-weight:600;color:#f1f5f9;margin-bottom:3px}
+.sb-plan-sub{font-size:10px;color:#64748b;margin-bottom:8px}
+.sb-quota-bar{height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-bottom:4px}
+.sb-quota-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.sb-quota-txt{display:flex;justify-content:space-between;font-size:9px;color:#64748b;font-family:'Space Mono',monospace}
+.sb-footer{border-top:1px solid rgba(255,255,255,0.06);padding:14px 18px;flex-shrink:0}
+.sb-user{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius:8px;padding:4px;transition:background 0.15s}
+.sb-user:hover{background:rgba(255,255,255,0.04)}
+.sb-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.sb-uname{font-size:12px;font-weight:600;color:#cbd5e1}
+.sb-urole{font-size:10px;color:#64748b}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:60px;flex-shrink:0;background:rgba(8,12,26,0.95);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;padding:0 24px;gap:12px;color:#f1f5f9}
+.tb-bc{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b}
+.tb-bc a{color:#64748b;text-decoration:none}
+.tb-bc a:hover{color:#3b82f6}
+.tb-sep{font-size:10px;color:#1e293b}
+.tb-page{font-size:14px;font-weight:700;letter-spacing:-0.02em;color:#f1f5f9}
+.tb-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+.theme-toggle{display:flex;align-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:2px}
+.tt-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:transparent;color:#64748b;font-family:'Inter',sans-serif}
+.tt-btn.active{background:#3b82f6;color:#fff}
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;transition:all 0.15s;position:relative}
+.icon-btn:hover{border-color:rgba(59,130,246,0.3);color:#cbd5e1}
+.notif-dot{position:absolute;top:6px;right:7px;width:6px;height:6px;border-radius:50%;background:#ef4444;border:1.5px solid #080c1a}
+.av-sm{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* SETTINGS LAYOUT */
+.settings-layout{flex:1;display:flex;overflow:hidden;min-height:0}
+.set-side{width:240px;flex-shrink:0;border-right:1px solid var(--sb-bdr);padding:20px 14px;overflow-y:auto;background:var(--card)}
+.set-side::-webkit-scrollbar{width:3px}.set-side::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+.set-side h2{font-size:18px;font-weight:700;letter-spacing:-0.02em;color:var(--text);margin-bottom:4px;padding:0 8px}
+.set-side .sub{font-size:11px;color:var(--muted);padding:0 8px;margin-bottom:18px}
+.set-sec{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:8px 10px 4px;opacity:0.7}
+.set-nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:all 0.15s;border:1px solid transparent;margin-bottom:1px}
+.set-nav:hover{background:var(--card-hover);color:var(--text2)}
+.set-nav.active{background:rgba(59,130,246,0.1);color:var(--text);border-color:rgba(59,130,246,0.2)}
+.set-nav .ico{width:14px;height:14px;opacity:0.7;flex-shrink:0;display:flex}
+.set-nav.active .ico{color:var(--blue);opacity:1}
+
+.set-main{flex:1;overflow-y:auto;padding:24px 32px}
+.set-main::-webkit-scrollbar{width:4px}.set-main::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+.set-page-t{font-size:22px;font-weight:700;letter-spacing:-0.03em;margin-bottom:3px;color:var(--text)}
+.set-page-s{font-size:12px;color:var(--muted);margin-bottom:22px}
+
+.card{background:var(--card);border:1px solid var(--card-b);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.card-hd{padding:14px 18px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:10px}
+.card-t{font-size:13px;font-weight:600;color:var(--text)}
+.card-s{font-size:11px;color:var(--muted);margin-top:1px}
+.card-bd{padding:18px}
+
+.row{display:grid;grid-template-columns:200px 1fr;gap:18px;padding:14px 0;border-bottom:1px solid var(--divider)}
+.row:last-child{border-bottom:none;padding-bottom:0}
+.row:first-child{padding-top:0}
+.row-l .lbl{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.row-l .des{font-size:11px;color:var(--muted);line-height:1.5}
+.row-r{display:flex;flex-direction:column;gap:8px}
+
+.inp{width:100%;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-b);border-radius:8px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:border-color 0.15s}
+.inp:focus{border-color:rgba(59,130,246,0.4)}
+.inp::placeholder{color:var(--muted)}
+.inp:disabled{opacity:0.55;cursor:not-allowed}
+.sel{width:100%;padding:9px 30px 9px 12px;background:var(--input-bg);border:1px solid var(--input-b);border-radius:8px;color:var(--text);font-size:13px;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;font-family:'Inter',sans-serif}
+.sel option{background:#0d1323;color:var(--text)}
+
+.toggle{position:relative;width:36px;height:20px;border-radius:10px;background:var(--input-b);cursor:pointer;transition:background 0.2s;flex-shrink:0}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.2s}
+.toggle.on{background:var(--blue)}
+.toggle.on::after{left:18px}
+.toggle-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--divider)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-info{flex:1}
+.toggle-info .t{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.toggle-info .s{font-size:11px;color:var(--muted);line-height:1.5}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;border:none;transition:all 0.2s}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(59,130,246,0.3)}
+.btn-ghost{background:transparent;border:1px solid var(--card-b);color:var(--muted)}
+.btn-ghost:hover{border-color:rgba(59,130,246,0.3);color:var(--text2)}
+.btn-danger{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,0.18)}
+
+.save-bar{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+
+/* Company read-only banner */
+.co-banner{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:12px;background:linear-gradient(120deg,rgba(59,130,246,0.08),rgba(6,182,212,0.04));border:1px solid rgba(59,130,246,0.18);margin-bottom:22px}
+.co-logo{width:46px;height:46px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0}
+.co-info{flex:1;min-width:0}
+.co-name{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
+.co-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.co-role{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:0.03em;background:rgba(16,185,129,0.12);color:var(--green);border:1px solid rgba(16,185,129,0.2);flex-shrink:0}
+.lock-hint{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);margin-top:6px}
+
+/* Profile picture row */
+.pp-wrap{display:flex;align-items:center;gap:16px}
+.pp-big{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* sessions */
+.sess{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--divider)}
+.sess:last-child{border-bottom:none}
+.sess-ic{width:34px;height:34px;border-radius:8px;background:var(--input-bg);border:1px solid var(--input-b);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.sess-info{flex:1}
+.sess-name{font-size:12px;font-weight:600;color:var(--text)}
+.sess-meta{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px}
+.sess-cur{font-size:9px;font-weight:700;color:var(--green);font-family:'Space Mono',monospace;background:rgba(16,185,129,0.12);padding:2px 7px;border-radius:5px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const Ic = ({p,size=15})=><svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={p}/></svg>;
+const I = {
+  home:"M2 6L8 1l6 5v8a1 1 0 01-1 1H3a1 1 0 01-1-1V6zM6 15V9h4v6",
+  doc:"M9 1H3a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V5L9 1zM9 1v4h4M5 9h6M5 12h4",
+  hist:"M8 1a7 7 0 100 14A7 7 0 008 1zM8 4v4l2.5 1.5",
+  gear:"M8 5.5A2.5 2.5 0 118 10.5A2.5 2.5 0 018 5.5zM8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3",
+  bell:"M8 1a4 4 0 014 4v4l1.5 2H.5L2 9V5a4 4 0 014-4zM6.5 13a1.5 1.5 0 003 0",
+  user:"M8 8a3 3 0 100-6 3 3 0 000 6zM2 14a6 6 0 0112 0",
+  shield:"M8 1L2 3v4c0 3.3 2.7 5.7 6 7 3.3-1.3 6-3.7 6-7V3L8 1z",
+  prefs:"M2 4h12M2 8h12M2 12h12M5 4v0M9 8v0M6 12v0",
+  bld:"M2 14V2h12v12M5 5h2M5 8h2M5 11h2M9 5h2M9 8h2M9 11h2",
+  lock:"M4 7V5a4 4 0 018 0v2M3 7h10v7H3z",
+  cam:"M2 4h3l1-1h4l1 1h3v9H2zM8 11a2 2 0 100-4 2 2 0 000 4z",
+  sun:"M8 11A3 3 0 108 5a3 3 0 000 6zM8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3",
+  moon:"M9 2a7 7 0 00-7 7 7 7 0 007 7 7 7 0 004.9-2.1A5 5 0 019 2z",
+  chevR:"M6 3l5 5-5 5",
+  more:"M4 8h.01M8 8h.01M12 8h.01",
+  laptop:"M2 3h12v8H2zM1 13h14",
+  phone:"M5 1h6v14H5z",
+  out:"M10 11l3-3-3-3M13 8H6M8 2H3v12h5",
+  key:"M9 6a3 3 0 11-3 3M14 11h-3v3l-1 1H8v-2H6L9 9",
+};
+
+const Sidebar = ()=>(
+  <div className="sidebar">
+    <div className="sb-logo">
+      <div className="sb-mark">S</div>
+      <div><div className="sb-name">Semlo<em>X</em></div><div className="sb-tag">AI Document Engine</div></div>
+    </div>
+    <div className="sb-body">
+      <div className="sb-sec">Menu</div>
+      <a href="Semlox Dashboard.html" className="nav-item"><span className="nav-icon"><Ic p={I.home}/></span>Overview</a>
+      <a href="Semlox AWB Processing.html" className="nav-item"><span className="nav-icon"><Ic p={I.doc}/></span>AWB Processing<span className="nav-badge">3</span></a>
+      <a href="Semlox Document Manager.html" className="nav-item"><span className="nav-icon"><Ic p={I.hist}/></span>History</a>
+      <a href="#" className="nav-item active"><span className="nav-icon"><Ic p={I.gear}/></span>Settings</a>
+    </div>
+    <div className="sb-footer">
+      <a href="Semlox Profile.html" className="sb-user" style={{textDecoration:'none'}}>
+        <div className="sb-av">TB</div>
+        <div><div className="sb-uname">Tobias B.</div><div className="sb-urole">Operator</div></div>
+        <div style={{marginLeft:'auto',color:'#64748b',display:'flex'}}><Ic p={I.more}/></div>
+      </a>
+    </div>
+  </div>
+);
+
+const Topbar = ({theme,setTheme})=>(
+  <div className="topbar">
+    <div>
+      <div className="tb-bc">
+        <a href="Semlox Dashboard.html">Overview</a>
+        <span className="tb-sep"><Ic p={I.chevR} size={10}/></span>
+        <span className="tb-page">Settings</span>
+      </div>
+      <div style={{fontSize:11,color:'#64748b',marginTop:2}}>DB Schenker Logistics · Your account</div>
+    </div>
+    <div className="tb-right">
+      <div className="theme-toggle">
+        <button className={`tt-btn ${theme==='light'?'active':''}`} onClick={()=>setTheme('light')}><Ic p={I.sun} size={12}/>Light</button>
+        <button className={`tt-btn ${theme==='dark'?'active':''}`} onClick={()=>setTheme('dark')}><Ic p={I.moon} size={12}/>Dark</button>
+      </div>
+      <div className="icon-btn"><Ic p={I.bell} size={14}/><div className="notif-dot"/></div>
+      <div className="av-sm">TB</div>
+    </div>
+  </div>
+);
+
+/* ── SECTIONS ── */
+const MyProfile = ()=>(
+  <>
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">Profile Picture</div><div className="card-s">Shown to your team in the activity feed</div></div></div>
+      <div className="card-bd">
+        <div className="pp-wrap">
+          <div className="pp-big">TB</div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-ghost"><Ic p={I.cam} size={12}/>Upload</button>
+            <button className="btn btn-danger">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">Personal Information</div><div className="card-s">Your details on this workspace</div></div></div>
+      <div className="card-bd">
+        <div className="row">
+          <div className="row-l"><div className="lbl">Full Name</div><div className="des">Displayed across the app.</div></div>
+          <div className="row-r"><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><input className="inp" defaultValue="Tobias"/><input className="inp" defaultValue="Bauer"/></div></div>
+        </div>
+        <div className="row">
+          <div className="row-l"><div className="lbl">Email</div><div className="des">Used to sign in. Contact your admin to change.</div></div>
+          <div className="row-r"><input className="inp" defaultValue="t.bauer@schenker.de" disabled/></div>
+        </div>
+        <div className="row">
+          <div className="row-l"><div className="lbl">Job Title</div><div className="des">Optional.</div></div>
+          <div className="row-r"><input className="inp" defaultValue="AWB Operator"/></div>
+        </div>
+        <div className="row">
+          <div className="row-l"><div className="lbl">Phone</div><div className="des">For account recovery only.</div></div>
+          <div className="row-r"><input className="inp" placeholder="+49 …"/></div>
+        </div>
+        <div className="save-bar"><button className="btn btn-ghost">Cancel</button><button className="btn btn-primary">Save Changes</button></div>
+      </div>
+    </div>
+  </>
+);
+
+const Security = ()=>{
+  const [pw,setPw]=useState('');
+  const strength=Math.min(4,(pw.length>=8?1:0)+(/[A-Z]/.test(pw)?1:0)+(/[0-9]/.test(pw)?1:0)+(/[^A-Za-z0-9]/.test(pw)?1:0));
+  return (
+  <>
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">Change Password</div><div className="card-s">Last changed 47 days ago</div></div></div>
+      <div className="card-bd">
+        <div className="row"><div className="row-l"><div className="lbl">Current Password</div></div><div className="row-r"><input className="inp" type="password" placeholder="••••••••••"/></div></div>
+        <div className="row">
+          <div className="row-l"><div className="lbl">New Password</div><div className="des">Min 8 chars · 1 number · 1 uppercase · 1 symbol</div></div>
+          <div className="row-r">
+            <input className="inp" type="password" placeholder="••••••••••" value={pw} onChange={e=>setPw(e.target.value)}/>
+            {pw && <div style={{display:'flex',gap:3,marginTop:2}}>{[1,2,3,4].map(n=><div key={n} style={{height:4,flex:1,borderRadius:2,background:n<=strength?['#ef4444','#f59e0b','#3b82f6','#10b981'][strength-1]:'var(--input-b)'}}/>)}</div>}
+          </div>
+        </div>
+        <div className="row"><div className="row-l"><div className="lbl">Confirm Password</div></div><div className="row-r"><input className="inp" type="password" placeholder="••••••••••"/></div></div>
+        <div className="save-bar"><button className="btn btn-primary"><Ic p={I.key} size={12}/>Update Password</button></div>
+      </div>
+    </div>
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">Two-Factor Authentication</div><div className="card-s">Add an extra layer of security</div></div><span style={{marginLeft:'auto'}} className="co-role">Enabled</span></div>
+      <div className="card-bd">
+        <div className="toggle-row"><div className="toggle-info"><div className="t">Authenticator App</div><div className="s">Google Authenticator · configured 28 Jan 2026</div></div><button className="btn btn-ghost">Reconfigure</button></div>
+        <div className="toggle-row"><div className="toggle-info"><div className="t">Recovery Codes</div><div className="s">10 single-use backup codes</div></div><button className="btn btn-ghost">View</button></div>
+      </div>
+    </div>
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">Active Sessions</div><div className="card-s">Devices signed into your account</div></div><button style={{marginLeft:'auto'}} className="btn btn-danger"><Ic p={I.out} size={12}/>Sign out all</button></div>
+      <div className="card-bd">
+        {[
+          {ic:I.laptop,n:'MacBook Pro · Chrome 126',m:'Frankfurt, DE · 78.94.18.21',cur:true},
+          {ic:I.phone,n:'iPhone 15 · SemloX iOS',m:'Frankfurt, DE · 2 hours ago',cur:false},
+        ].map((s,i)=>(
+          <div key={i} className="sess">
+            <div className="sess-ic"><Ic p={s.ic} size={15}/></div>
+            <div className="sess-info"><div className="sess-name">{s.n} {s.cur&&<span className="sess-cur">CURRENT</span>}</div><div className="sess-meta">{s.m}</div></div>
+            {!s.cur&&<button className="btn btn-ghost">Revoke</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  </>
+  );
+};
+
+const Notifs = ()=>{
+  const [p,setP]=useState({done:true,fail:true,weekly:false,mention:true,inapp:true});
+  const T=(k,t,s)=>(<div className="toggle-row"><div className="toggle-info"><div className="t">{t}</div><div className="s">{s}</div></div><div className={`toggle ${p[k]?'on':''}`} onClick={()=>setP({...p,[k]:!p[k]})}/></div>);
+  return (
+    <div className="card">
+      <div className="card-hd"><div><div className="card-t">My Notifications</div><div className="card-s">Alerts about your own work</div></div></div>
+      <div className="card-bd">
+        {T('done','AWB processed','Email when a document you uploaded finishes extracting')}
+        {T('fail','Processing failures','Email when one of your AWBs fails to parse')}
+        {T('mention','@mentions','When a teammate mentions you on a document')}
+        {T('weekly','Weekly summary','Friday digest of your processed volume')}
+        {T('inapp','In-app notifications','Show alerts in the dashboard bell')}
+      </div>
+    </div>
+  );
+};
+
+const Prefs = ()=>(
+  <div className="card">
+    <div className="card-hd"><div><div className="card-t">Preferences</div><div className="card-s">How the app looks and behaves for you</div></div></div>
+    <div className="card-bd">
+      <div className="row"><div className="row-l"><div className="lbl">Theme</div><div className="des">Use the toggle in the top bar, or set a default.</div></div><div className="row-r"><select className="sel" defaultValue="dark"><option value="dark">Dark</option><option value="light">Light</option><option value="system">Match system</option></select></div></div>
+      <div className="row"><div className="row-l"><div className="lbl">Language</div></div><div className="row-r"><select className="sel" defaultValue="en"><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option></select></div></div>
+      <div className="row"><div className="row-l"><div className="lbl">Time Zone</div><div className="des">Affects timestamps you see.</div></div><div className="row-r"><select className="sel" defaultValue="berlin"><option value="berlin">Europe/Berlin (CET)</option><option value="london">Europe/London (GMT)</option><option value="ny">America/New_York (EST)</option></select></div></div>
+      <div className="row"><div className="row-l"><div className="lbl">Default landing page</div><div className="des">Where you start after login.</div></div><div className="row-r"><select className="sel" defaultValue="overview"><option value="overview">Overview</option><option value="awb">AWB Processing</option><option value="history">History</option></select></div></div>
+      <div className="save-bar"><button className="btn btn-primary">Save Preferences</button></div>
+    </div>
+  </div>
+);
+
+const SECTIONS=[
+  {id:'profile',label:'My Profile',icon:I.user,comp:MyProfile,title:'My Profile',sub:'Manage your personal information'},
+  {id:'security',label:'Account & Security',icon:I.shield,comp:Security,title:'Account & Security',sub:'Password, two-factor, and active sessions'},
+  {id:'notif',label:'Notifications',icon:I.bell,comp:Notifs,title:'Notifications',sub:'Choose what you get alerted about'},
+  {id:'prefs',label:'Preferences',icon:I.prefs,comp:Prefs,title:'Preferences',sub:'Theme, language, and defaults'},
+];
+
+function App(){
+  const [theme,setTheme]=useState('dark');
+  const [sec,setSec]=useState('profile');
+  useEffect(()=>{document.documentElement.setAttribute('data-theme',theme)},[theme]);
+  const cur=SECTIONS.find(s=>s.id===sec);
+  const Comp=cur.comp;
+  return (
+    <div className="shell">
+      <Sidebar/>
+      <div className="main">
+        <Topbar theme={theme} setTheme={setTheme}/>
+        <div className="settings-layout">
+          <div className="set-side">
+            <h2>Settings</h2>
+            <div className="sub">Your account</div>
+            <div className="set-sec">Account</div>
+            {SECTIONS.map(s=>(
+              <div key={s.id} className={`set-nav ${sec===s.id?'active':''}`} onClick={()=>setSec(s.id)}>
+                <span className="ico"><Ic p={s.icon}/></span>{s.label}
+              </div>
+            ))}
+          </div>
+          <div className="set-main">
+            <div className="set-page-t">{cur.title}</div>
+            <div className="set-page-s">{cur.sub}</div>
+
+            {/* Read-only company banner — always visible */}
+            <div className="co-banner">
+              <div className="co-logo">DB</div>
+              <div className="co-info">
+                <div className="co-name">DB Schenker Logistics</div>
+                <div className="co-meta">Enterprise Plan · Managed by your administrator</div>
+                <div className="lock-hint"><Ic p={I.lock} size={10}/>Company settings are managed by admins</div>
+              </div>
+              <span className="co-role"><Ic p={I.user} size={10}/>Operator</span>
+            </div>
+
+            <Comp/>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

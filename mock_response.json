@@ -1,0 +1,149 @@
+{
+  "success": true,
+  "message": "AWB processed successfully",
+  "status_code": 200,
+  "data": {
+    "final": {
+      "entities": [
+        {
+          "type": "Airport_of_Departure",
+          "text": "FRA",
+          "confidence": 0.9978587627410889,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "airport_of_destination",
+          "text": "PVG",
+          "confidence": 0.9851993322372437,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "House_Airwaybill",
+          "text": "33153610",
+          "confidence": 0,
+          "need_review": true,
+          "comment": "HAWB invalid or unverified"
+        },
+        {
+          "type": "Shippers_Name_and_Address",
+          "text": "Roche Diagnostics GmbH\nSandhofer Str. 116\n68305 MANNHEIM\nGermany\n+496217590",
+          "confidence": 0.5327970385551453,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "Consignee_Name_and_Address",
+          "text": "(ATG) Shanghai Poweruping Int'l Logistics Co., Ltd.\nNo.2 Warehouse Haitian Yi Rd. Pudong Int'l Airport\n201202 SHANGHAI\nChina",
+          "confidence": 1,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "Issued_by",
+          "text": "Lufthansa\nLanger Kornweg 34i\nD-65441 Kelsterbach\nGermany",
+          "confidence": 0.9975146651268005,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "date",
+          "text": "08.08.2025",
+          "confidence": 0.9956703782081604,
+          "need_review": false,
+          "comment": "Date normalized successfully"
+        },
+        {
+          "type": "number_of_pieces",
+          "text": "1",
+          "confidence": 0.9977594614028931,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "number_of_pieces",
+          "text": "1",
+          "confidence": 0.99998939037323,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "pieces_line",
+          "text": "1",
+          "confidence": 0.9977594614028931,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "pieces_line",
+          "text": "1",
+          "confidence": 0.99998939037323,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "gross_weight",
+          "text": "12",
+          "confidence": 0.5873069763183594,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "weight_line",
+          "text": "12",
+          "confidence": 0.5873069763183594,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "chargeable_weight",
+          "text": "15",
+          "confidence": 0.9999938011169434,
+          "need_review": false,
+          "comment": "Chargeable weight present"
+        },
+        {
+          "type": "weight_unit_kg_lb",
+          "text": "KG",
+          "confidence": 0.9962472319602966,
+          "need_review": false,
+          "comment": "Weight unit accepted as KG"
+        },
+        {
+          "type": "handling_information",
+          "text": "PLS NOTIFY CONSIGNEE IMMEDIATELY UPON ARRIVAL PLS KEEP BETWEEN -20 AND -10°C\n24HR EMERGENCY CONTACT +49614283550",
+          "confidence": 0.6680675148963928,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "nature_and_quantity_goods_discription",
+          "text": "PHARMACEUTICALS\nENTRECTINIB IMPURITY\nREFERENCE STANDARD,\nDANGEROUS GOODS IN\nEXCEPTED QUANTITIES\n1 X 8 KG",
+          "confidence": 1,
+          "need_review": false,
+          "comment": ""
+        },
+        {
+          "type": "nature_and_quantity_goods_dimensions_or_volume",
+          "text": "1/39x39x60 cms",
+          "confidence": 1,
+          "need_review": false,
+          "comment": ""
+        }
+      ]
+    },
+    "meta": {
+      "run_id": "mock-run-7c41e2a2",
+      "stages": {
+        "extractor": "ok",
+        "llm_verify": "ok",
+        "rules": "ok"
+      },
+      "errors": [],
+      "timing": {
+        "total_seconds": 34.429
+      }
+    }
+  }
+}

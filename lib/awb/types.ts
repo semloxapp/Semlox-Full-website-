@@ -1,0 +1,68 @@
+export type AwbExtractionMode = "mock" | "live" | "fallback";
+
+export type AwbFieldStatus = "valid" | "review" | "warning" | "missing";
+
+export type AwbExtractedField = {
+  key: string;
+  label: string;
+  value: string;
+  rawType?: string;
+  confidence: number;
+  confidencePercent: number;
+  needsReview: boolean;
+  comment?: string;
+  status: AwbFieldStatus;
+  color: "green" | "amber" | "red" | "blue";
+  page?: number;
+  source?: {
+    text?: string;
+    boundingBox?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null;
+  };
+};
+
+export type AwbExtractionResponse = {
+  ok: true;
+  mode: AwbExtractionMode;
+  message: string;
+  document: {
+    id: string;
+    fileName: string;
+    fileType: string;
+    pages: number;
+    status: "uploaded" | "extracting" | "review_required" | "ready_to_issue" | "draft" | "issued" | "failed";
+    processingTimeMs: number;
+    runId?: string;
+  };
+  summary: {
+    totalFields: number;
+    capturedFields: number;
+    averageConfidence: number;
+    averageConfidencePercent: number;
+    needsReview: number;
+    validFields: number;
+    warningFields: number;
+    missingFields: number;
+  };
+  fields: AwbExtractedField[];
+  meta: {
+    runId?: string;
+    stages?: Record<string, string>;
+    errors?: string[];
+    totalSeconds?: number;
+  };
+  warnings: string[];
+  raw?: unknown;
+};
+
+export type NormalizeAwbExtractionOptions = {
+  mode: AwbExtractionMode;
+  documentId: string;
+  fileName: string;
+  fileType: string;
+  pages?: number;
+};

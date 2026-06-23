@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Document Manager</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ── THEME TOKENS ── */
+[data-theme="dark"]{
+  --bg:#04060f;
+  --bg2:#070a17;
+  --sidebar:#080c1a;
+  --sb-bdr:rgba(255,255,255,0.06);
+  --card:rgba(255,255,255,0.03);
+  --card-b:rgba(255,255,255,0.08);
+  --card-hover:rgba(255,255,255,0.055);
+  --text:#f1f5f9;
+  --text2:#cbd5e1;
+  --muted:#64748b;
+  --faint:#1e293b;
+  --input-bg:rgba(255,255,255,0.04);
+  --input-b:rgba(255,255,255,0.1);
+  --row-hover:rgba(255,255,255,0.025);
+  --row-sel:rgba(59,130,246,0.07);
+  --tbl-head:rgba(255,255,255,0.02);
+  --tbl-bdr:rgba(255,255,255,0.03);
+  --divider:rgba(255,255,255,0.06);
+  --shadow:0 20px 60px rgba(0,0,0,0.5);
+  --cal-bg:#0d1323;
+  --topbar:rgba(8,12,26,0.85);
+  --scrollbar:#1e293b;
+}
+[data-theme="light"]{
+  --bg:#f1f5f9;
+  --bg2:#e8eef5;
+  --sidebar:#080c1a;
+  --sb-bdr:rgba(255,255,255,0.06);
+  --card:#ffffff;
+  --card-b:rgba(0,0,0,0.08);
+  --card-hover:#f8fafc;
+  --text:#0f172a;
+  --text2:#1e293b;
+  --muted:#64748b;
+  --faint:#e2e8f0;
+  --input-bg:#ffffff;
+  --input-b:rgba(0,0,0,0.1);
+  --row-hover:rgba(59,130,246,0.03);
+  --row-sel:rgba(59,130,246,0.06);
+  --tbl-head:#f8fafc;
+  --tbl-bdr:rgba(0,0,0,0.05);
+  --divider:rgba(0,0,0,0.07);
+  --shadow:0 8px 40px rgba(0,0,0,0.12);
+  --cal-bg:#ffffff;
+  --topbar:rgba(8,12,26,0.95);
+  --scrollbar:#cbd5e1;
+}
+
+/* ── BASE ── */
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;transition:background 0.25s,color 0.25s}
+[data-theme="dark"] body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(59,130,246,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.04) 1px,transparent 1px);
+  background-size:52px 52px;
+}
+:root{--blue:#3b82f6;--cyan:#06b6d4;--teal:#00d4aa;--orange:#f97316;--red:#ef4444;--amber:#f59e0b;--green:#10b981;--purple:#8b5cf6;}
+.shell{position:relative;z-index:1;display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:224px;flex-shrink:0;display:flex;flex-direction:column;
+  background:var(--sidebar);border-right:1px solid var(--sb-bdr);
+  transition:background 0.25s,border-color 0.25s;
+}
+.sb-logo{height:60px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--sb-bdr);flex-shrink:0}
+.sb-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-name{font-size:15px;font-weight:700;letter-spacing:-0.02em}
+.sb-name em{background:linear-gradient(135deg,#3b82f6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:normal}
+.sb-tag{font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;margin-top:1px}
+.sb-body{flex:1;overflow-y:auto;padding:10px 0}
+.sb-body::-webkit-scrollbar{width:3px}
+.sb-body::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+.sb-sec{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:8px 18px 4px;opacity:0.6}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:9px 12px;margin:1px 8px;
+  border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);
+  cursor:pointer;transition:all 0.15s;border:1px solid transparent;position:relative;
+  text-decoration:none;
+}
+.nav-item:hover{background:var(--card-hover);color:var(--text2)}
+.nav-item.active{background:rgba(59,130,246,0.1);color:var(--text);border-color:rgba(59,130,246,0.2)}
+[data-theme="light"] .nav-item.active{background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.15)}
+.nav-item.active::before{content:'';position:absolute;left:-4px;top:25%;bottom:25%;width:2px;border-radius:2px;background:linear-gradient(180deg,#3b82f6,#06b6d4)}
+.nav-icon{width:15px;height:15px;flex-shrink:0;opacity:0.6}
+.nav-item.active .nav-icon{opacity:1;color:var(--blue)}
+.nav-badge{margin-left:auto;font-size:9px;font-family:'Space Mono',monospace;padding:2px 6px;border-radius:8px;background:rgba(59,130,246,0.15);color:var(--blue)}
+.sb-div{height:1px;background:var(--sb-bdr);margin:6px 10px}
+.sb-plan{margin:6px 8px;padding:12px;border-radius:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15)}
+[data-theme="light"] .sb-plan{background:rgba(59,130,246,0.05);border-color:rgba(59,130,246,0.12)}
+.sb-plan-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:3px}
+.sb-plan-sub{font-size:10px;color:var(--muted);margin-bottom:8px}
+.sb-quota-bar{height:4px;background:var(--faint);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.sb-quota-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.sb-quota-txt{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:'Space Mono',monospace}
+.sb-footer{border-top:1px solid var(--sb-bdr);padding:14px 18px;flex-shrink:0}
+.sb-user{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius:8px;padding:4px;transition:background 0.15s}
+.sb-user:hover{background:var(--card-hover)}
+.sb-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.sb-uname{font-size:12px;font-weight:600;color:var(--text2)}
+.sb-urole{font-size:10px;color:var(--muted)}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{
+  height:60px;flex-shrink:0;
+  background:var(--topbar);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--sb-bdr);
+  display:flex;align-items:center;padding:0 24px;gap:12px;
+  transition:background 0.25s;
+}
+.tb-breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.tb-breadcrumb a{color:var(--muted);text-decoration:none;transition:color 0.15s}
+.tb-breadcrumb a:hover{color:var(--blue)}
+.tb-sep{font-size:10px;color:var(--faint)}
+.tb-page{font-size:14px;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
+.tb-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+
+/* THEME TOGGLE */
+.theme-toggle{
+  display:flex;align-items:center;gap:0;
+  background:var(--card);border:1px solid var(--card-b);border-radius:8px;
+  padding:2px;overflow:hidden;
+}
+.tt-btn{
+  display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;
+  font-size:11px;font-weight:500;cursor:pointer;transition:all 0.15s;
+  border:none;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;
+}
+.tt-btn.active{background:var(--blue);color:#fff}
+[data-theme="light"] .tt-btn.active{background:var(--blue);color:#fff}
+
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--card-b);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);transition:all 0.15s;position:relative}
+.icon-btn:hover{border-color:rgba(59,130,246,0.3);color:var(--text2)}
+.notif-dot{position:absolute;top:6px;right:7px;width:6px;height:6px;border-radius:50%;background:var(--red);border:1.5px solid var(--sidebar)}
+.upload-btn{display:flex;align-items:center;gap:7px;padding:8px 18px;border-radius:9px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border:none;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;white-space:nowrap}
+.upload-btn:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(59,130,246,0.4)}
+
+/* ── BODY ── */
+.body-split{flex:1;display:flex;overflow:hidden;min-height:0}
+.doc-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.content{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.content::-webkit-scrollbar{width:4px}
+.content::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+
+/* ── PAGE HEADER ── */
+.page-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-0.03em;margin-bottom:4px}
+.page-sub{font-size:12px;color:var(--muted)}
+.hdr-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill-btn{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:20px;border:1px solid var(--card-b);background:var(--card);
+  font-size:12px;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;
+  transition:all 0.15s;white-space:nowrap;
+}
+.pill-btn:hover{border-color:rgba(59,130,246,0.3);color:var(--text2);background:var(--card-hover)}
+.pill-btn.danger:hover{border-color:rgba(239,68,68,0.3);color:var(--red)}
+.pill-btn.primary{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);color:var(--blue)}
+.total-chip{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;background:var(--card);border:1px solid var(--card-b);font-size:12px;font-family:'Space Mono',monospace;color:var(--text2);font-weight:700}
+
+/* ── STAT CARDS ── */
+.stat-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat-card{
+  background:var(--card);border:1px solid var(--card-b);border-radius:12px;
+  padding:16px 18px;position:relative;overflow:hidden;transition:all 0.2s;cursor:default;
+}
+.stat-card:hover{border-color:rgba(59,130,246,0.25);transform:translateY(-1px);box-shadow:var(--shadow)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.sc-blue::before{background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.sc-green::before{background:linear-gradient(90deg,#10b981,#06b6d4)}
+.sc-red::before{background:linear-gradient(90deg,#ef4444,#f97316)}
+.sc-amber::before{background:linear-gradient(90deg,#f59e0b,#f97316)}
+.stat-lbl{font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.stat-val{font-size:30px;font-weight:700;letter-spacing:-0.04em;font-family:'Space Mono',monospace;line-height:1;margin-bottom:6px}
+.stat-val.blue{color:var(--blue)}.stat-val.green{color:var(--green)}.stat-val.red{color:var(--red)}.stat-val.amber{color:var(--amber)}
+.stat-foot{font-size:10px;color:var(--muted)}
+.stat-foot.link{color:var(--blue);cursor:pointer}
+.stat-foot.link:hover{text-decoration:underline}
+
+/* ── FILTER BAR ── */
+.filter-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--card);border:1px solid var(--card-b);border-radius:12px;
+  padding:12px 16px;
+}
+.filter-section{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-divider{width:1px;height:26px;background:var(--divider)}
+.search-inp{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;
+  border-radius:8px;border:1px solid var(--input-b);background:var(--input-bg);
+  font-size:12px;min-width:220px;flex:1;max-width:280px;
+  transition:border-color 0.2s;
+}
+.search-inp:focus-within{border-color:rgba(59,130,246,0.4)}
+.search-inp input{background:none;border:none;outline:none;color:var(--text);font-size:12px;font-family:'Inter',sans-serif;width:100%}
+.search-inp input::placeholder{color:var(--muted)}
+.date-btn{
+  display:flex;align-items:center;gap:7px;padding:7px 12px;
+  border-radius:8px;border:1px solid var(--input-b);background:var(--input-bg);
+  font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;white-space:nowrap;
+  font-family:'Inter',sans-serif;position:relative;
+}
+.date-btn:hover{border-color:rgba(59,130,246,0.3)}
+.date-btn.has-value{border-color:rgba(59,130,246,0.3);color:var(--blue)}
+.date-sep{font-size:11px;color:var(--muted)}
+.qpill{
+  padding:6px 12px;border-radius:7px;font-size:12px;
+  border:1px solid var(--input-b);background:transparent;
+  color:var(--muted);cursor:pointer;transition:all 0.15s;
+  white-space:nowrap;font-family:'Inter',sans-serif;
+}
+.qpill:hover{border-color:rgba(59,130,246,0.3);color:var(--text2)}
+.qpill.active{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.35);color:var(--blue);font-weight:600}
+.fselect{
+  padding:7px 28px 7px 10px;border-radius:8px;font-size:12px;
+  border:1px solid var(--input-b);background:var(--input-bg);color:var(--text2);
+  cursor:pointer;font-family:'Inter',sans-serif;outline:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+  transition:border-color 0.15s;
+}
+.fselect:hover{border-color:rgba(59,130,246,0.3)}
+.fselect option{background:var(--cal-bg);color:var(--text)}
+
+/* ── CALENDAR POPOVER ── */
+.cal-popover{
+  position:absolute;top:calc(100% + 8px);left:0;z-index:200;
+  background:var(--cal-bg);border:1px solid var(--card-b);border-radius:14px;
+  padding:16px;box-shadow:var(--shadow);min-width:300px;
+  animation:popIn 0.15s ease;
+}
+@keyframes popIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-nav{display:flex;gap:4px}
+.cal-nav-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--card-b);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all 0.15s;font-size:12px}
+.cal-nav-btn:hover{border-color:rgba(59,130,246,0.3);color:var(--blue)}
+.cal-month{font-size:13px;font-weight:700;color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-label{text-align:center;font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);padding:4px 0;letter-spacing:0.05em}
+.cal-day{
+  width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;cursor:pointer;transition:all 0.12s;color:var(--text2);
+  border:1px solid transparent;
+}
+.cal-day:hover{background:rgba(59,130,246,0.1);color:var(--blue)}
+.cal-day.today{border-color:rgba(59,130,246,0.3);color:var(--blue);font-weight:700}
+.cal-day.selected{background:var(--blue);color:#fff;font-weight:700}
+.cal-day.in-range{background:rgba(59,130,246,0.08);color:var(--blue)}
+.cal-day.other-month{color:var(--muted);opacity:0.4}
+.cal-day.disabled{opacity:0.2;cursor:not-allowed}
+.cal-footer{display:flex;gap:8px;margin-top:14px;border-top:1px solid var(--divider);padding-top:14px}
+.cal-foot-btn{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;border:none}
+.cal-foot-btn.primary{background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff}
+.cal-foot-btn.ghost{background:transparent;border:1px solid var(--card-b);color:var(--muted)}
+.cal-foot-btn.ghost:hover{color:var(--text2);border-color:rgba(255,255,255,0.15)}
+.cal-range-labels{display:flex;gap:8px;margin-bottom:12px}
+.cal-range-chip{flex:1;padding:6px 10px;border-radius:7px;background:var(--card);border:1px solid var(--card-b);font-size:11px;font-family:'Space Mono',monospace;color:var(--text2);text-align:center}
+.cal-range-chip.active{border-color:rgba(59,130,246,0.4);color:var(--blue)}
+
+/* ── TABLE ── */
+.table-card{background:var(--card);border:1px solid var(--card-b);border-radius:14px;overflow:hidden;transition:background 0.25s}
+.tbl-top{padding:14px 18px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tbl-title{font-size:13px;font-weight:600;color:var(--text)}
+.tbl-count{font-size:11px;font-family:'Space Mono',monospace;padding:2px 8px;border-radius:5px;background:rgba(59,130,246,0.1);color:var(--blue)}
+.bulk-actions{display:flex;gap:6px;margin-left:auto}
+.tbl-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;border:1px solid var(--card-b);background:var(--card);color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s}
+.tbl-btn:hover{border-color:rgba(59,130,246,0.3);color:var(--blue)}
+.tbl-btn.danger:hover{border-color:rgba(239,68,68,0.3);color:var(--red)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{
+  padding:10px 14px;font-size:10px;font-weight:600;letter-spacing:0.08em;
+  text-transform:uppercase;color:var(--muted);text-align:left;
+  background:var(--tbl-head);border-bottom:1px solid var(--divider);
+  white-space:nowrap;cursor:pointer;user-select:none;transition:color 0.15s;
+}
+.tbl th:hover{color:var(--text2)}
+.tbl th .sort-icon{margin-left:4px;opacity:0.4;font-size:9px}
+.tbl td{
+  padding:11px 14px;font-size:12px;color:var(--text2);
+  border-bottom:1px solid var(--tbl-bdr);vertical-align:middle;
+  transition:background 0.1s;
+}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--row-hover);cursor:pointer}
+.tbl tr.row-selected td{background:var(--row-sel)}
+.mono{font-family:'Space Mono',monospace;font-size:11px;color:var(--text);font-weight:700}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:0.03em;white-space:nowrap}
+.bdot{width:4px;height:4px;border-radius:50%;background:currentColor}
+.b-ok{background:rgba(16,185,129,0.12);color:var(--green);border:1px solid rgba(16,185,129,0.2)}
+.b-pdf{background:rgba(139,92,246,0.12);color:var(--purple);border:1px solid rgba(139,92,246,0.2)}
+.b-issued{background:rgba(59,130,246,0.12);color:var(--blue);border:1px solid rgba(59,130,246,0.2)}
+.b-draft{background:rgba(245,158,11,0.12);color:var(--amber);border:1px solid rgba(245,158,11,0.2)}
+.b-fail{background:rgba(239,68,68,0.12);color:var(--red);border:1px solid rgba(239,68,68,0.2)}
+.b-partial{background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.2)}
+.doc-tag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);font-size:10px;font-family:'Space Mono',monospace;color:var(--blue);font-weight:700}
+.open-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);color:var(--blue);cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s}
+.open-btn:hover{background:rgba(59,130,246,0.18);border-color:rgba(59,130,246,0.4)}
+.fields-wrap{display:flex;align-items:center;gap:7px}
+.fields-val{font-size:11px;font-weight:700;font-family:'Space Mono',monospace}
+.fields-track{height:3px;width:52px;background:var(--faint);border-radius:2px;overflow:hidden}
+.fields-fill{height:100%;border-radius:2px}
+.chk{
+  width:15px;height:15px;border-radius:4px;border:1.5px solid var(--input-b);
+  background:var(--input-bg);cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:all 0.12s;
+}
+.chk.on{background:var(--blue);border-color:var(--blue)}
+.user-cell{display:flex;align-items:center;gap:7px}
+.u-av{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── PAGINATION ── */
+.pagination{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;border-top:1px solid var(--divider);flex-wrap:wrap;gap:8px;
+}
+.pg-info{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace}
+.pg-btns{display:flex;gap:4px}
+.pg-btn{
+  width:30px;height:30px;border-radius:7px;border:1px solid var(--card-b);
+  background:var(--card);color:var(--muted);font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;font-family:'Inter',sans-serif;
+}
+.pg-btn:hover{border-color:rgba(59,130,246,0.3);color:var(--text2)}
+.pg-btn.on{background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:var(--blue);font-weight:700}
+.pg-btn:disabled{opacity:0.3;cursor:not-allowed}
+.pg-rows{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.pg-sel{
+  background:var(--card);border:1px solid var(--card-b);color:var(--text2);
+  padding:4px 8px;border-radius:6px;font-size:11px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;
+}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{
+  width:0;flex-shrink:0;border-left:1px solid var(--sb-bdr);
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--cal-bg);transition:width 0.25s ease;
+}
+.detail-panel.open{width:380px}
+.dp-head{
+  height:60px;display:flex;align-items:center;padding:0 18px;
+  border-bottom:1px solid var(--sb-bdr);gap:10px;flex-shrink:0;
+}
+.dp-hdr-info{flex:1;min-width:0}
+.dp-awb{font-size:12px;font-weight:700;font-family:'Space Mono',monospace;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.dp-close{width:26px;height:26px;border-radius:6px;border:1px solid var(--card-b);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:12px;transition:all 0.15s;flex-shrink:0}
+.dp-close:hover{border-color:rgba(239,68,68,0.3);color:var(--red)}
+.dp-body{flex:1;overflow-y:auto;padding:16px}
+.dp-body::-webkit-scrollbar{width:3px}
+.dp-body::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+.dp-sec{margin-bottom:18px}
+.dp-sec-title{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;opacity:0.7}
+.dp-summary{display:flex;gap:0;border:1px solid var(--card-b);border-radius:10px;overflow:hidden;margin-bottom:10px}
+.dp-sum-item{flex:1;padding:12px;text-align:center;border-right:1px solid var(--card-b)}
+.dp-sum-item:last-child{border-right:none}
+.dp-sum-val{font-size:18px;font-weight:700;font-family:'Space Mono',monospace;margin-bottom:2px}
+.dp-sum-lbl{font-size:9px;color:var(--muted);letter-spacing:0.04em}
+.dp-field{display:flex;flex-direction:column;gap:3px;padding:9px 11px;border-radius:8px;background:var(--card);border:1px solid var(--card-b);margin-bottom:5px;transition:border-color 0.15s}
+.dp-field:hover{border-color:rgba(59,130,246,0.2)}
+.dp-field-lbl{font-size:9px;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase}
+.dp-field-val{font-size:11px;font-weight:600;font-family:'Space Mono',monospace;color:var(--text)}
+.dp-field-val.bad{color:var(--red)}
+.conf-row{display:flex;align-items:center;gap:6px;margin-top:2px}
+.conf-bar{flex:1;height:2px;background:var(--faint);border-radius:1px;overflow:hidden}
+.conf-fill{height:100%;border-radius:1px}
+.conf-pct{font-size:9px;font-family:'Space Mono',monospace;width:28px;text-align:right}
+.tl-item{display:flex;gap:10px;margin-bottom:8px;align-items:flex-start}
+.tl-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);margin-top:4px;flex-shrink:0;position:relative}
+.tl-dot::after{content:'';position:absolute;top:8px;left:3px;width:1px;height:20px;background:var(--divider)}
+.tl-item:last-child .tl-dot::after{display:none}
+.tl-title{font-size:11px;font-weight:600;color:var(--text2)}
+.tl-time{font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:1px}
+.dp-actions{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--sb-bdr);flex-shrink:0}
+.dp-btn{flex:1;padding:9px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;border:none;display:flex;align-items:center;justify-content:center;gap:6px}
+.dp-btn.primary{background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff}
+.dp-btn.primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(59,130,246,0.3)}
+.dp-btn.ghost{background:transparent;border:1px solid var(--card-b);color:var(--muted)}
+.dp-btn.ghost:hover{border-color:rgba(59,130,246,0.3);color:var(--text2)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fa{animation:fadeUp 0.3s ease both}
+.d1{animation-delay:0s}.d2{animation-delay:0.05s}.d3{animation-delay:0.08s}.d4{animation-delay:0.11s}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useRef, useEffect } = React;
+
+/* ── ICONS ── */
+const Ic = ({ p, size=15, style }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={style}>
+    <path d={p}/>
+  </svg>
+);
+const I = {
+  home:    "M2 6L8 1l6 5v8a1 1 0 01-1 1H3a1 1 0 01-1-1V6zM6 15V9h4v6",
+  doc:     "M9 1H3a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V5L9 1zM9 1v4h4M5 9h6M5 12h4",
+  history: "M8 1a7 7 0 100 14A7 7 0 008 1zM8 4v4l2.5 1.5",
+  gear:    "M8 5.5A2.5 2.5 0 118 10.5A2.5 2.5 0 018 5.5zM8 1v2M8 13v2M1 8h2M13 8h2",
+  bell:    "M8 1a4 4 0 014 4v4l1.5 2H.5L2 9V5a4 4 0 014-4zM6.5 13a1.5 1.5 0 003 0",
+  search:  "M7 12A5 5 0 107 2a5 5 0 000 10zM14 14l-3-3",
+  upload:  "M8 2v9M5 5l3-3 3 3M2 13h12",
+  filter:  "M2 4h12M5 8h6M7 12h2",
+  refresh: "M13 8a5 5 0 11-1.4-3.5M14 2v4h-4",
+  x:       "M3 3l10 10M13 3L3 13",
+  open:    "M10 3h4v4M14 3L9 8M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9",
+  dl:      "M8 2v9M5 11l3 3 3-3M2 15h12",
+  more:    "M4 8h.01M8 8h.01M12 8h.01",
+  cal:     "M1 5h14M3 1v3M13 1v3M1 3h14v11a1 1 0 01-1 1H2a1 1 0 01-1-1V3z",
+  sun:     "M8 11A3 3 0 108 5a3 3 0 000 6zM8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3",
+  moon:    "M9 2a7 7 0 00-7 7 7 7 0 007 7 7 7 0 004.9-2.1A5 5 0 019 2z",
+  check:   "M2 8l4 4 8-6",
+  col:     "M2 2h4v12H2zM10 2h4v12h-4z",
+  awb:     "M3 6h9L9 11h8",
+  chevR:   "M6 3l5 5-5 5",
+};
+
+/* ── DATA ── */
+const DOCS = [
+  {id:1, date:'27/04/2026',time:'10:42:15 am',awb:'724-12849302',action:'Initial Extraction',type:'AWB',status:'ok',     fields:14,extracted:14,user:'Anna K.',   size:'248 KB',pages:2},
+  {id:2, date:'27/04/2026',time:'10:41:52 am',awb:'724-12849302',action:'Generated PDF',     type:'AWB',status:'pdf',    fields:14,extracted:14,user:'Anna K.',   size:'312 KB',pages:2},
+  {id:3, date:'27/04/2026',time:'10:41:55 am',awb:'724-12849302',action:'Issued AWB',        type:'AWB',status:'issued', fields:14,extracted:14,user:'Anna K.',   size:'312 KB',pages:2},
+  {id:4, date:'27/04/2026',time:'09:18:03 am',awb:'180-00293817',action:'Initial Extraction',type:'AWB',status:'partial',fields:14,extracted:11,user:'M. Schulz', size:'184 KB',pages:1},
+  {id:5, date:'27/04/2026',time:'09:18:40 am',awb:'180-00293817',action:'Draft Saved',       type:'AWB',status:'draft',  fields:14,extracted:11,user:'M. Schulz', size:'184 KB',pages:1},
+  {id:6, date:'26/04/2026',time:'04:55:22 pm',awb:'618-44192003',action:'Initial Extraction',type:'AWB',status:'fail',   fields:14,extracted:0, user:'T. Bauer',  size:'512 KB',pages:3},
+  {id:7, date:'26/04/2026',time:'02:30:10 pm',awb:'020-91843001',action:'Initial Extraction',type:'AWB',status:'ok',     fields:14,extracted:14,user:'Anna K.',   size:'196 KB',pages:1},
+  {id:8, date:'26/04/2026',time:'02:30:55 pm',awb:'020-91843001',action:'Generated PDF',     type:'AWB',status:'pdf',    fields:14,extracted:14,user:'Anna K.',   size:'206 KB',pages:1},
+  {id:9, date:'26/04/2026',time:'02:31:12 pm',awb:'020-91843001',action:'Issued AWB',        type:'AWB',status:'issued', fields:14,extracted:14,user:'Anna K.',   size:'206 KB',pages:1},
+  {id:10,date:'25/04/2026',time:'11:12:34 am',awb:'083-22019847',action:'Initial Extraction',type:'AWB',status:'partial',fields:14,extracted:13,user:'K. Weber',  size:'302 KB',pages:2},
+  {id:11,date:'25/04/2026',time:'11:13:01 am',awb:'083-22019847',action:'Generated PDF',     type:'AWB',status:'pdf',    fields:14,extracted:13,user:'K. Weber',  size:'318 KB',pages:2},
+  {id:12,date:'24/04/2026',time:'03:45:00 pm',awb:'083-11234567',action:'Initial Extraction',type:'AWB',status:'ok',     fields:14,extracted:14,user:'M. Schulz', size:'178 KB',pages:1},
+  {id:13,date:'24/04/2026',time:'03:45:30 pm',awb:'083-11234567',action:'Generated PDF',     type:'AWB',status:'pdf',    fields:14,extracted:14,user:'M. Schulz', size:'192 KB',pages:1},
+  {id:14,date:'24/04/2026',time:'03:46:00 pm',awb:'083-11234567',action:'Issued AWB',        type:'AWB',status:'issued', fields:14,extracted:14,user:'M. Schulz', size:'192 KB',pages:1},
+  {id:15,date:'23/04/2026',time:'09:00:00 am',awb:'999-00112233',action:'Initial Extraction',type:'AWB',status:'fail',   fields:14,extracted:0, user:'T. Bauer',  size:'88 KB', pages:1},
+  {id:16,date:'22/04/2026',time:'02:14:55 pm',awb:'447-83920011',action:'Initial Extraction',type:'AWB',status:'ok',     fields:14,extracted:14,user:'Anna K.',   size:'224 KB',pages:2},
+  {id:17,date:'22/04/2026',time:'02:15:30 pm',awb:'447-83920011',action:'Issued AWB',        type:'AWB',status:'issued', fields:14,extracted:14,user:'Anna K.',   size:'224 KB',pages:2},
+  {id:18,date:'21/04/2026',time:'10:05:10 am',awb:'339-00488271',action:'Initial Extraction',type:'AWB',status:'partial',fields:14,extracted:12,user:'K. Weber',  size:'155 KB',pages:1},
+];
+
+const STATUS_CFG = {
+  ok:      {label:'Success',        cls:'b-ok',      color:'var(--green)'},
+  pdf:     {label:'PDF Generated',  cls:'b-pdf',     color:'var(--purple)'},
+  issued:  {label:'AWB Issued',     cls:'b-issued',  color:'var(--blue)'},
+  draft:   {label:'Draft Saved',    cls:'b-draft',   color:'var(--amber)'},
+  partial: {label:'Partial',        cls:'b-partial', color:'var(--orange)'},
+  fail:    {label:'Failed',         cls:'b-fail',    color:'var(--red)'},
+};
+
+const ACTION_COLORS = {
+  'Initial Extraction':'var(--cyan)',
+  'Generated PDF':'var(--purple)',
+  'Issued AWB':'var(--blue)',
+  'Draft Saved':'var(--amber)',
+};
+
+/* ── CALENDAR ── */
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function Calendar({ value, onChange, onClose }) {
+  const today = new Date(2026,3,27);
+  const [cur, setCur] = useState({ m: value ? value.getMonth() : today.getMonth(), y: value ? value.getFullYear() : today.getFullYear() });
+
+  const first = new Date(cur.y, cur.m, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(cur.y, cur.m+1, 0).getDate();
+  const daysInPrev = new Date(cur.y, cur.m, 0).getDate();
+
+  const cells = [];
+  for(let i=0;i<startOffset;i++) cells.push({day:daysInPrev-startOffset+i+1,cur:false});
+  for(let i=1;i<=daysInMonth;i++) cells.push({day:i,cur:true});
+  while(cells.length%7!==0) cells.push({day:cells.length-daysInMonth-startOffset+1,cur:false});
+
+  const prev = () => setCur(c => c.m===0?{m:11,y:c.y-1}:{m:c.m-1,y:c.y});
+  const next = () => setCur(c => c.m===11?{m:0,y:c.y+1}:{m:c.m+1,y:c.y});
+
+  return (
+    <div className="cal-popover" onClick={e=>e.stopPropagation()}>
+      <div className="cal-header">
+        <div className="cal-nav">
+          <button className="cal-nav-btn" onClick={prev}>‹</button>
+          <button className="cal-nav-btn" onClick={next}>›</button>
+        </div>
+        <div className="cal-month">{MONTHS[cur.m]} {cur.y}</div>
+      </div>
+      <div className="cal-grid">
+        {DAYS.map(d=><div key={d} className="cal-day-label">{d}</div>)}
+        {cells.map((c,i)=>{
+          const isToday = c.cur && c.day===today.getDate() && cur.m===today.getMonth() && cur.y===today.getFullYear();
+          const isSel = value && c.cur && c.day===value.getDate() && cur.m===value.getMonth() && cur.y===value.getFullYear();
+          return (
+            <div key={i}
+              className={`cal-day${!c.cur?' other-month':''}${isToday?' today':''}${isSel?' selected':''}`}
+              onClick={()=>c.cur&&onChange(new Date(cur.y,cur.m,c.day))}
+            >{c.day}</div>
+          );
+        })}
+      </div>
+      <div className="cal-footer">
+        <button className="cal-foot-btn ghost" onClick={()=>onChange(null)}>Clear</button>
+        <button className="cal-foot-btn primary" onClick={onClose}>Apply</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── DATE RANGE PICKER ── */
+function DateRangePicker({ from, to, onChange }) {
+  const [open, setOpen] = useState(null); // 'from' | 'to' | null
+  const ref = useRef();
+
+  useEffect(()=>{
+    const close = e => { if(ref.current&&!ref.current.contains(e.target)) setOpen(null); };
+    document.addEventListener('mousedown',close);
+    return()=>document.removeEventListener('mousedown',close);
+  },[]);
+
+  const fmt = d => d ? `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}` : null;
+
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:6,position:'relative'}} ref={ref}>
+      <button
+        className={`date-btn ${from?'has-value':''}`}
+        onClick={()=>setOpen(open==='from'?null:'from')}
+      >
+        <Ic p={I.cal} size={12}/>
+        {fmt(from)||'From date'}
+      </button>
+      <span className="date-sep">→</span>
+      <button
+        className={`date-btn ${to?'has-value':''}`}
+        onClick={()=>setOpen(open==='to'?null:'to')}
+      >
+        <Ic p={I.cal} size={12}/>
+        {fmt(to)||'To date'}
+      </button>
+      {open==='from' && (
+        <div style={{position:'absolute',top:'100%',left:0}}>
+          <Calendar value={from} onChange={d=>{onChange(d,to);if(d)setOpen('to')}} onClose={()=>setOpen(null)}/>
+        </div>
+      )}
+      {open==='to' && (
+        <div style={{position:'absolute',top:'100%',left:0}}>
+          <Calendar value={to} onChange={d=>{onChange(from,d);setOpen(null)}} onClose={()=>setOpen(null)}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── DETAIL PANEL ── */
+function DetailPanel({ doc, onClose }) {
+  if(!doc) return null;
+  const sc = STATUS_CFG[doc.status];
+  const fc = v => v>=95?'var(--green)':v>=85?'var(--amber)':v>0?'var(--orange)':'var(--red)';
+
+  const fields = [
+    {lbl:'AWB Number',     val:doc.awb,               conf:99},
+    {lbl:'Shipper Name',   val:'DB Schenker GmbH',    conf:99},
+    {lbl:'Consignee',      val:'Siemens AG — SIN',    conf:98},
+    {lbl:'Origin Airport', val:'FRA — Frankfurt',     conf:99},
+    {lbl:'Dest. Airport',  val:'SIN — Singapore',     conf:99},
+    {lbl:'Gross Weight',   val:'1,240 kg',            conf:98},
+    {lbl:'Pieces',         val:'14 pcs',              conf:97},
+    {lbl:'HS Code',        val:doc.extracted>=13?'8471.30.0000':'Not extracted',conf:doc.extracted>=13?94:0},
+    {lbl:'Flight No.',     val:doc.extracted>=13?'LH9012':'Not extracted',      conf:doc.extracted>=13?91:0},
+    {lbl:'Special Handling',val:doc.extracted>=12?'CAO':'Not extracted',        conf:doc.extracted>=12?87:0},
+  ];
+
+  const timeline = [
+    {icon:'📤',label:'File Uploaded',     time:'10:41:50 am',color:'var(--blue)'},
+    {icon:'🤖',label:'AI Extraction Run', time:'10:41:51 am',color:'var(--cyan)'},
+    {icon:'✅',label:'Fields Extracted',  time:'10:41:52 am',color:'var(--green)'},
+    {icon:'📄',label:'PDF Generated',     time:'10:41:53 am',color:'var(--purple)'},
+    ...(doc.status==='issued'?[{icon:'✉️',label:'AWB Issued',time:'10:41:55 am',color:'var(--blue)'}]:[]),
+  ];
+
+  return (
+    <>
+      <div className="dp-head">
+        <div className="dp-hdr-info">
+          <div className="dp-awb">{doc.awb}</div>
+          <div className="dp-sub">{doc.action} · {doc.date}</div>
+        </div>
+        <button className="dp-close" onClick={onClose}><Ic p={I.x} size={11}/></button>
+      </div>
+      <div className="dp-body">
+        {/* Status + meta */}
+        <div style={{display:'flex',gap:7,alignItems:'center',marginBottom:16,flexWrap:'wrap'}}>
+          <span className={`badge ${sc.cls}`}><div className="bdot"/>{sc.label}</span>
+          <span className="doc-tag">AWB</span>
+          <span style={{fontSize:11,color:'var(--muted)',marginLeft:'auto'}}>{doc.size} · {doc.pages}p</span>
+        </div>
+
+        {/* Summary */}
+        <div className="dp-sec">
+          <div className="dp-sec-title">Extraction Summary</div>
+          <div className="dp-summary">
+            <div className="dp-sum-item">
+              <div className="dp-sum-val" style={{color:'var(--green)'}}>{doc.extracted}/{doc.fields}</div>
+              <div className="dp-sum-lbl">Fields</div>
+            </div>
+            <div className="dp-sum-item">
+              <div className="dp-sum-val" style={{color:'var(--blue)'}}>{doc.pages}</div>
+              <div className="dp-sum-lbl">Pages</div>
+            </div>
+            <div className="dp-sum-item">
+              <div className="dp-sum-val" style={{color:'var(--cyan)'}}>{doc.extracted===0?'0':Math.round(doc.extracted/doc.fields*100)}%</div>
+              <div className="dp-sum-lbl">Accuracy</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fields */}
+        <div className="dp-sec">
+          <div className="dp-sec-title">Extracted Fields · AI Confidence</div>
+          {fields.slice(0, doc.extracted===0?2:fields.length).map((f,i)=>(
+            <div key={i} className="dp-field">
+              <div className="dp-field-lbl">{f.lbl}</div>
+              <div className={`dp-field-val ${f.conf===0?'bad':''}`}>{f.val}</div>
+              {f.conf>0 && (
+                <div className="conf-row">
+                  <div className="conf-bar"><div className="conf-fill" style={{width:`${f.conf}%`,background:fc(f.conf)}}/></div>
+                  <span className="conf-pct" style={{color:fc(f.conf)}}>{f.conf}%</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Timeline */}
+        <div className="dp-sec">
+          <div className="dp-sec-title">Document Timeline</div>
+          {timeline.map((t,i)=>(
+            <div key={i} className="tl-item">
+              <div className="tl-dot" style={{background:t.color}}/>
+              <div>
+                <div className="tl-title">{t.label}</div>
+                <div className="tl-time">{doc.date} · {t.time}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="dp-actions">
+        <button className="dp-btn primary"><Ic p={I.open} size={12}/>Open Document</button>
+        <button className="dp-btn ghost"><Ic p={I.dl} size={12}/>Download</button>
+      </div>
+    </>
+  );
+}
+
+/* ── ROOT APP ── */
+function App() {
+  const [theme, setTheme] = useState('dark');
+  const [search, setSearch] = useState('');
+  const [dateQ, setDateQ] = useState('all');
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
+  const [statusF, setStatusF] = useState('all');
+  const [actionF, setActionF] = useState('all');
+  const [selected, setSelected] = useState(null);
+  const [page, setPage] = useState(1);
+  const [checked, setChecked] = useState([]);
+  const [sortCol, setSortCol] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
+  const perPage = 10;
+
+  // Apply theme to html element
+  useEffect(()=>{
+    document.documentElement.setAttribute('data-theme', theme);
+  },[theme]);
+
+  const filtered = useMemo(()=>{
+    return DOCS.filter(d=>{
+      if(search){
+        const q=search.toLowerCase();
+        if(!d.awb.includes(q)&&!d.action.toLowerCase().includes(q)&&!d.user.toLowerCase().includes(q)&&!d.date.includes(q)) return false;
+      }
+      if(statusF!=='all'&&d.status!==statusF) return false;
+      if(actionF!=='all'&&d.action!==actionF) return false;
+      return true;
+    });
+  },[search,statusF,actionF]);
+
+  const paginated = filtered.slice((page-1)*perPage, page*perPage);
+  const totalPages = Math.max(1,Math.ceil(filtered.length/perPage));
+
+  const stats = {
+    total: DOCS.length,
+    success: DOCS.filter(d=>['ok','issued','pdf'].includes(d.status)).length,
+    failed: DOCS.filter(d=>d.status==='fail').length,
+    draft: DOCS.filter(d=>d.status==='draft').length,
+  };
+
+  const toggleCheck = id => setChecked(c=>c.includes(id)?c.filter(x=>x!==id):[...c,id]);
+  const toggleAll = () => setChecked(checked.length===paginated.length?[]:paginated.map(d=>d.id));
+  const handleSort = col => { if(sortCol===col){setSortDir(d=>d==='asc'?'desc':'asc')}else{setSortCol(col);setSortDir('asc')} };
+
+  return (
+    <div className="shell">
+      {/* SIDEBAR */}
+      <div className="sidebar">
+        <div className="sb-logo">
+          <div className="sb-mark">
+            <svg viewBox="0 0 20 20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M3 6h9L9 11h8"/></svg>
+          </div>
+          <div>
+            <div className="sb-name">Semlo<em>X</em></div>
+            <div className="sb-tag">AI Document Engine</div>
+          </div>
+        </div>
+        <div className="sb-body">
+          <div className="sb-sec">Menu</div>
+          {[
+            {href:'Semlox Dashboard.html', icon:'home', label:'Overview'},
+            {href:'#', icon:'doc', label:'AWB Processing', badge:'3'},
+            {href:'#', icon:'history', label:'Document Manager', active:true},
+            {href:'#', icon:'gear', label:'Settings'},
+          ].map(item=>(
+            <a key={item.label} href={item.href||'#'} className={`nav-item ${item.active?'active':''}`} style={{textDecoration:'none'}}>
+              <span className="nav-icon" style={{display:'flex'}}><Ic p={I[item.icon]}/></span>
+              <span style={{flex:1}}>{item.label}</span>
+              {item.badge&&<span className="nav-badge">{item.badge}</span>}
+            </a>
+          ))}
+          <div className="sb-div"/>
+          <div className="sb-plan">
+            <div className="sb-plan-name">Enterprise Plan</div>
+            <div className="sb-plan-sub">10,000 AWBs / month</div>
+            <div className="sb-quota-bar"><div className="sb-quota-fill" style={{width:'48%'}}/></div>
+            <div className="sb-quota-txt"><span style={{color:'var(--blue)'}}>4,823 used</span><span>5,177 left</span></div>
+          </div>
+        </div>
+        <div className="sb-footer">
+          <div className="sb-user">
+            <div className="sb-av">AK</div>
+            <div>
+              <div className="sb-uname">Anna Keller</div>
+              <div className="sb-urole">DB Schenker · Admin</div>
+            </div>
+            <div style={{marginLeft:'auto',color:'var(--muted)',display:'flex'}}><Ic p={I.more}/></div>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div className="main">
+        {/* TOPBAR */}
+        <div className="topbar">
+          <div>
+            <div className="tb-breadcrumb">
+              <a href="Semlox Dashboard.html">Overview</a>
+              <span className="tb-sep"><Ic p={I.chevR} size={10}/></span>
+              <span className="tb-page">Document Manager</span>
+            </div>
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>DB Schenker Logistics · 27 Apr 2026</div>
+          </div>
+          <div className="tb-right">
+            {/* Theme toggle */}
+            <div className="theme-toggle">
+              <button className={`tt-btn ${theme==='light'?'active':''}`} onClick={()=>setTheme('light')}>
+                <Ic p={I.sun} size={12}/> Light
+              </button>
+              <button className={`tt-btn ${theme==='dark'?'active':''}`} onClick={()=>setTheme('dark')}>
+                <Ic p={I.moon} size={12}/> Dark
+              </button>
+            </div>
+            <button className="upload-btn"><Ic p={I.upload} size={13}/>Upload AWB</button>
+            <div className="icon-btn"><Ic p={I.bell} size={14}/><div className="notif-dot"/></div>
+            <div style={{width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff',flexShrink:0}}>AK</div>
+          </div>
+        </div>
+
+        {/* BODY */}
+        <div className="body-split">
+          <div className="doc-main">
+            <div className="content">
+
+              {/* PAGE HEADER */}
+              <div className="page-hdr fa d1">
+                <div>
+                  <div className="page-title">Activity History</div>
+                  <div className="page-sub">Track generated, updated, and finalized AWBs · All document actions</div>
+                </div>
+                <div className="hdr-actions">
+                  <div className="total-chip">Total: {filtered.length}</div>
+                  <button className="pill-btn"><Ic p={I.refresh} size={12}/>Refresh</button>
+                  {checked.length>0 && <button className="pill-btn primary"><Ic p={I.check} size={12}/>{checked.length} selected</button>}
+                  <button className="pill-btn danger" onClick={()=>setChecked([])}><Ic p={I.x} size={12}/>Clear</button>
+                  <button className="pill-btn"><Ic p={I.dl} size={12}/>Export CSV</button>
+                </div>
+              </div>
+
+              {/* STAT CARDS */}
+              <div className="stat-row fa d2">
+                {[
+                  {cls:'sc-blue', lbl:'Total Documents', val:stats.total, valCls:'blue', foot:'All time · all actions'},
+                  {cls:'sc-green',lbl:'Successful',      val:stats.success,valCls:'green',foot:'Issued + PDF + Extracted'},
+                  {cls:'sc-red',  lbl:'Failed',          val:stats.failed, valCls:'red',  foot:'↗ View & re-process', link:true},
+                  {cls:'sc-amber',lbl:'Draft Saves',     val:stats.draft,  valCls:'amber',foot:'Pending completion'},
+                ].map(s=>(
+                  <div key={s.lbl} className={`stat-card ${s.cls}`}>
+                    <div className="stat-lbl">{s.lbl}</div>
+                    <div className={`stat-val ${s.valCls}`}>{s.val}</div>
+                    <div className={`stat-foot ${s.link?'link':''}`}>{s.foot}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* FILTER BAR */}
+              <div className="filter-bar fa d3">
+                <div className="filter-section">
+                  <div className="search-inp">
+                    <Ic p={I.search} size={13}/>
+                    <input placeholder="Search by AWB #, action, user…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}}/>
+                  </div>
+                </div>
+                <div className="filter-divider"/>
+                <div className="filter-section">
+                  <DateRangePicker from={fromDate} to={toDate} onChange={(f,t)=>{setFromDate(f);setToDate(t)}}/>
+                </div>
+                <div className="filter-divider"/>
+                <div className="filter-section">
+                  {[['all','All time'],['today','Today'],['7d','Last 7 days'],['30d','Last 30 days']].map(([k,l])=>(
+                    <button key={k} className={`qpill ${dateQ===k?'active':''}`} onClick={()=>setDateQ(k)}>{l}</button>
+                  ))}
+                </div>
+                <div className="filter-divider"/>
+                <div className="filter-section" style={{gap:6}}>
+                  <select className="fselect" value={statusF} onChange={e=>{setStatusF(e.target.value);setPage(1)}}>
+                    <option value="all">All Status</option>
+                    <option value="ok">Success</option>
+                    <option value="pdf">PDF Generated</option>
+                    <option value="issued">AWB Issued</option>
+                    <option value="partial">Partial</option>
+                    <option value="draft">Draft</option>
+                    <option value="fail">Failed</option>
+                  </select>
+                  <select className="fselect" value={actionF} onChange={e=>{setActionF(e.target.value);setPage(1)}}>
+                    <option value="all">All Actions</option>
+                    <option value="Initial Extraction">Initial Extraction</option>
+                    <option value="Generated PDF">Generated PDF</option>
+                    <option value="Issued AWB">Issued AWB</option>
+                    <option value="Draft Saved">Draft Saved</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* TABLE */}
+              <div className="table-card fa d4">
+                <div className="tbl-top">
+                  <span className="tbl-title">Documents</span>
+                  <span className="tbl-count">{filtered.length} records</span>
+                  {checked.length>0&&<span style={{fontSize:11,color:'var(--blue)',fontFamily:'Space Mono',marginLeft:4}}>{checked.length} selected</span>}
+                  <div className="bulk-actions">
+                    {checked.length>0&&<>
+                      <button className="tbl-btn" style={{color:'var(--blue)',borderColor:'rgba(59,130,246,0.3)'}}>Re-process</button>
+                      <button className="tbl-btn">Download</button>
+                      <button className="tbl-btn danger" onClick={()=>setChecked([])}>Deselect</button>
+                    </>}
+                    {checked.length===0&&<>
+                      <button className="tbl-btn"><Ic p={I.col} size={11}/>Columns</button>
+                      <button className="tbl-btn"><Ic p={I.dl} size={11}/>Export</button>
+                    </>}
+                  </div>
+                </div>
+                <div style={{overflowX:'auto'}}>
+                  <table className="tbl" style={{minWidth:900}}>
+                    <thead>
+                      <tr>
+                        <th style={{width:36,padding:'10px 10px 10px 16px'}}>
+                          <div className={`chk ${checked.length===paginated.length&&paginated.length>0?'on':''}`} onClick={toggleAll}>
+                            {checked.length===paginated.length&&paginated.length>0&&<Ic p={I.check} size={10}/>}
+                          </div>
+                        </th>
+                        {[['date','Date'],['awb','AWB Number'],['action','Action'],['type','Type'],['fields','Fields'],['user','Processed By'],['status','Status']].map(([k,l])=>(
+                          <th key={k} onClick={()=>handleSort(k)}>
+                            {l} <span className="sort-icon">{sortCol===k?(sortDir==='asc'?'↑':'↓'):'↕'}</span>
+                          </th>
+                        ))}
+                        <th>View</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginated.map(row=>{
+                        const sc=STATUS_CFG[row.status];
+                        const fc=row.extracted===row.fields?'var(--green)':row.extracted===0?'var(--red)':'var(--amber)';
+                        const isSel=selected?.id===row.id;
+                        const isChk=checked.includes(row.id);
+                        return (
+                          <tr key={row.id} className={isSel?'row-selected':''} onClick={()=>setSelected(isSel?null:row)}>
+                            <td style={{padding:'11px 10px 11px 16px'}} onClick={e=>{e.stopPropagation();toggleCheck(row.id)}}>
+                              <div className={`chk ${isChk?'on':''}`}>{isChk&&<Ic p={I.check} size={9}/>}</div>
+                            </td>
+                            <td>
+                              <div style={{fontFamily:'Space Mono',fontSize:10,color:'var(--text)',fontWeight:600,whiteSpace:'nowrap'}}>{row.date}</div>
+                              <div style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)',marginTop:1}}>{row.time}</div>
+                            </td>
+                            <td><span className="mono">{row.awb}</span></td>
+                            <td><span style={{fontSize:12,color:ACTION_COLORS[row.action]||'var(--text2)',fontWeight:500}}>{row.action}</span></td>
+                            <td><span className="doc-tag">{row.type}</span></td>
+                            <td>
+                              <div className="fields-wrap">
+                                <span className="fields-val" style={{color:fc}}>{row.extracted}/{row.fields}</span>
+                                <div className="fields-track"><div className="fields-fill" style={{width:`${(row.extracted/row.fields)*100}%`,background:fc}}/></div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="user-cell">
+                                <div className="u-av">{row.user.split(' ').map(n=>n[0]).join('')}</div>
+                                <span style={{fontSize:12}}>{row.user}</span>
+                              </div>
+                            </td>
+                            <td><span className={`badge ${sc.cls}`}><div className="bdot"/>{sc.label}</span></td>
+                            <td onClick={e=>e.stopPropagation()}>
+                              <button className="open-btn" onClick={()=>setSelected(isSel?null:row)}>
+                                <Ic p={I.open} size={11}/>Open
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* PAGINATION */}
+                <div className="pagination">
+                  <div className="pg-info">Showing {filtered.length===0?0:(page-1)*perPage+1}–{Math.min(page*perPage,filtered.length)} of {filtered.length}</div>
+                  <div className="pg-btns">
+                    <button className="pg-btn" disabled={page===1} onClick={()=>setPage(p=>p-1)}>‹</button>
+                    {Array.from({length:Math.min(totalPages,5)},(_,i)=>i+1).map(p=>(
+                      <button key={p} className={`pg-btn ${page===p?'on':''}`} onClick={()=>setPage(p)}>{p}</button>
+                    ))}
+                    <button className="pg-btn" disabled={page===totalPages} onClick={()=>setPage(p=>p+1)}>›</button>
+                  </div>
+                  <div className="pg-rows">
+                    Rows per page:
+                    <select className="pg-sel"><option>10</option><option>25</option><option>50</option></select>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* DETAIL PANEL */}
+          <div className={`detail-panel ${selected?'open':''}`}>
+            <DetailPanel doc={selected} onClose={()=>setSelected(null)}/>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="80" fill="#04060f"/>
+  <rect width="20" height="80" fill="#080c1a"/>
+  <rect x="24" y="8" width="88" height="8" rx="2" fill="rgba(255,255,255,0.04)"/>
+  <rect x="24" y="20" width="20" height="10" rx="2" fill="rgba(59,130,246,0.2)"/>
+  <rect x="46" y="20" width="20" height="10" rx="2" fill="rgba(16,185,129,0.2)"/>
+  <rect x="68" y="20" width="20" height="10" rx="2" fill="rgba(239,68,68,0.2)"/>
+  <rect x="90" y="20" width="18" height="10" rx="2" fill="rgba(245,158,11,0.2)"/>
+  <rect x="24" y="34" width="88" height="8" rx="2" fill="rgba(255,255,255,0.04)"/>
+  <rect x="24" y="45" width="88" height="5" rx="1" fill="rgba(255,255,255,0.03)"/>
+  <rect x="24" y="52" width="88" height="5" rx="1" fill="rgba(255,255,255,0.03)"/>
+  <rect x="24" y="59" width="88" height="5" rx="1" fill="rgba(255,255,255,0.03)"/>
+  <rect x="24" y="66" width="88" height="5" rx="1" fill="rgba(255,255,255,0.03)"/>
+</svg>
+</template>
+</body>
+</html>

@@ -1,0 +1,83 @@
+Fix only the Team Members refresh UX in Settings.
+
+Current issue:
+When company owner/admin sends an invitation and the invited user accepts it, the Team Members list does not update on the spot. The owner/admin needs a clear refresh button in the Team Members section to reload the latest member statuses.
+
+Do not change:
+
+* auth/login/session/middleware
+* invitation flow
+* invite password setup flow
+* database schema
+* RLS
+* dashboard
+* history
+* AWB processing
+* notifications
+* unrelated settings sections
+
+Task:
+Add a proper Refresh button/functionality to the Team Members list.
+
+Location:
+Settings → Team Members section.
+
+Required behavior:
+
+1. Add a refresh button near the Team Members card header/search/filter area.
+2. Button label/icon can be:
+
+   * Refresh
+   * or circular refresh icon
+3. On click:
+
+   * call the existing `refreshMembers()` / members reload function if it exists
+   * otherwise refetch `/api/company/members?companyId=...`
+   * use `credentials: "include"`
+4. Keep existing members visible while refresh is loading.
+5. Show loading state on button:
+
+   * disable button
+   * optionally rotate refresh icon
+   * text: “Refreshing...”
+6. After refresh:
+
+   * update Team Members list
+   * latest statuses should show:
+
+     * `invited` if `accepted_at` is null
+     * `active` if `accepted_at` is not null
+7. If refresh fails:
+
+   * show toast/message:
+     “Could not refresh team members.”
+   * keep existing list visible
+8. Do not reset search/filter unless necessary.
+9. Do not close Add Member modal if it is open.
+10. Do not refetch repeatedly/infinite loop.
+
+UI requirements:
+
+* Keep existing SemLoX design.
+* Button should match existing dashboard/settings button style.
+* Place it close to search/filter/Add Member, for example:
+  Search members | Role filter | Refresh | Add Member
+* Or in card header right side if space is better.
+* Do not redesign Team Members page.
+
+Optional but useful:
+
+* After successful invite/resend/remove/role update, call the same refresh function once.
+* But still keep manual Refresh button visible.
+
+Testing:
+
+1. Owner/admin opens Settings → Team Members.
+2. Refresh button is visible.
+3. Click Refresh.
+4. Button shows loading state.
+5. Member list reloads.
+6. Existing list does not disappear/flicker.
+7. If an invited user accepted the invite, status changes from invited to active after refresh.
+8. Search/filter remains stable.
+9. No unrelated pages changed.

@@ -1,0 +1,2050 @@
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA — STEP 1 OF 5
+-- Extensions & Enums (no dependencies)
+-- Run this FIRST in Supabase
+-- ======================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Member roles
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_role') THEN
+    CREATE TYPE member_role AS ENUM ('owner', 'admin', 'manager', 'operator', 'viewer');
+  END IF;
+END$$;
+
+-- Document lifecycle status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_status') THEN
+    CREATE TYPE document_status AS ENUM (
+      'uploaded', 'processing', 'extracted', 'reviewed', 'issued', 'failed'
+    );
+  END IF;
+END$$;
+
+-- AWB status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'awb_status') THEN
+    CREATE TYPE awb_status AS ENUM ('draft', 'issued', 'cancelled');
+  END IF;
+END$$;
+
+-- AWB number status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'awb_number_status') THEN
+    CREATE TYPE awb_number_status AS ENUM ('available', 'reserved', 'consumed', 'cancelled');
+  END IF;
+END$$;
+
+-- Audit action type
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'audit_action') THEN
+    CREATE TYPE audit_action AS ENUM (
+      'create', 'update', 'delete', 'login', 'logout', 'export', 'issue', 'approve'
+    );
+  END IF;
+END$$;
+
+-- Helper function: updated_at trigger (no dependencies)
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END$$;
+
+-- ======================================================
+-- ✅ STEP 1 COMPLETE
+-- Next: Run Step 2 (Core Tables)
+-- ======================================================
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA — STEP 2 OF 5
+-- Core Tables (companies, profiles, memberships, parties)
+-- Run this SECOND (after Step 1)
+-- ======================================================
+
+-- Companies (Organizations)
+CREATE TABLE IF NOT EXISTS companies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  logo_url TEXT,
+  headquarters_address TEXT,
+  tax_id TEXT,
+  contact_email TEXT NOT NULL,
+  phone TEXT,
+  timezone TEXT DEFAULT 'UTC',
+  awb_stock_threshold INTEGER DEFAULT 50,
+  max_team_members INTEGER DEFAULT 20,
+  monthly_quota INTEGER DEFAULT 10000,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS companies_created_idx ON companies(created_at DESC);
+
+CREATE TRIGGER companies_set_updated_at
+  BEFORE UPDATE ON companies
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Profiles (extend auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT,
+  job_title TEXT,
+  phone TEXT,
+  avatar_url TEXT,
+  city TEXT,
+  country TEXT,
+  postal_code TEXT,
+  timezone TEXT DEFAULT 'UTC',
+  is_active BOOLEAN DEFAULT TRUE,
+  deleted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS profiles_fullname_idx ON profiles(LOWER(full_name));
+CREATE INDEX IF NOT EXISTS profiles_active_idx ON profiles(is_active);
+
+CREATE TRIGGER profiles_set_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Memberships (users in companies)
+CREATE TABLE IF NOT EXISTS memberships (
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role member_role NOT NULL DEFAULT 'operator',
+  invited_by UUID REFERENCES auth.users(id),
+  invited_at TIMESTAMPTZ,
+  accepted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (company_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS memberships_user_idx ON memberships(user_id);
+CREATE INDEX IF NOT EXISTS memberships_role_idx ON memberships(company_id, role);
+
+CREATE TRIGGER memberships_set_updated_at
+  BEFORE UPDATE ON memberships
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Parties (Shippers, Consignees, Agents)
+CREATE TABLE IF NOT EXISTS parties (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  account_no TEXT,
+  address TEXT,
+  phone TEXT,
+  email TEXT,
+  party_type TEXT,
+  country_code TEXT,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT parties_unique_name_per_company UNIQUE(company_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS parties_company_idx ON parties(company_id);
+CREATE INDEX IF NOT EXISTS parties_type_idx ON parties(company_id, party_type);
+CREATE INDEX IF NOT EXISTS parties_name_idx ON parties(LOWER(name));
+
+CREATE TRIGGER parties_set_updated_at
+  BEFORE UPDATE ON parties
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- ✅ STEP 2 COMPLETE
+-- Next: Run Step 3 (Documents & Extraction)
+-- ======================================================
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA — STEP 3 OF 5
+-- Documents & Extraction Results
+-- Run this THIRD (after Step 2)
+-- ======================================================
+
+-- Documents (uploaded PDFs)
+CREATE TABLE IF NOT EXISTS documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  filename TEXT NOT NULL,
+  file_size_bytes BIGINT,
+  file_url TEXT,
+  mime_type TEXT DEFAULT 'application/pdf',
+  status document_status NOT NULL DEFAULT 'uploaded',
+  awb_id UUID,  -- Will add FK after awbs table created
+  errors JSONB,
+  processing_started_at TIMESTAMPTZ,
+  processing_completed_at TIMESTAMPTZ,
+  processing_duration_ms INTEGER,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS documents_company_idx ON documents(company_id);
+CREATE INDEX IF NOT EXISTS documents_status_idx ON documents(company_id, status);
+CREATE INDEX IF NOT EXISTS documents_created_idx ON documents(created_at DESC);
+
+CREATE TRIGGER documents_set_updated_at
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Extraction Results (AI output + confidence)
+CREATE TABLE IF NOT EXISTS extraction_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  extracted_data JSONB NOT NULL,
+  confidence_scores JSONB DEFAULT '{}'::JSONB,
+  average_confidence NUMERIC(5,2),
+  extraction_model TEXT,
+  extraction_version TEXT,
+  processing_time_ms INTEGER,
+  token_usage JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS extraction_results_document_idx ON extraction_results(document_id);
+CREATE INDEX IF NOT EXISTS extraction_results_company_idx ON extraction_results(company_id);
+CREATE INDEX IF NOT EXISTS extraction_results_confidence_idx ON extraction_results(average_confidence DESC);
+
+CREATE TRIGGER extraction_results_set_updated_at
+  BEFORE UPDATE ON extraction_results
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- ✅ STEP 3 COMPLETE
+-- Next: Run Step 4 (AWB Core)
+-- ======================================================
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA — STEP 4 OF 5
+-- AWB Core (numbers + records + history)
+-- Run this FOURTH (after Step 3)
+-- ======================================================
+
+-- AWB Numbers Inventory
+CREATE TABLE IF NOT EXISTS awb_numbers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  airline_prefix TEXT,
+  awb_number TEXT NOT NULL UNIQUE,
+  status awb_number_status NOT NULL DEFAULT 'available',
+  added_by UUID REFERENCES auth.users(id),
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  consumed_at TIMESTAMPTZ,
+  consumed_by UUID REFERENCES auth.users(id),
+  metadata JSONB DEFAULT '{}'::JSONB,
+  CONSTRAINT awb_numbers_unique_per_company UNIQUE(company_id, awb_number)
+);
+
+CREATE INDEX IF NOT EXISTS awb_numbers_company_status_idx ON awb_numbers(company_id, status);
+CREATE INDEX IF NOT EXISTS awb_numbers_available_idx ON awb_numbers(company_id) WHERE status = 'available';
+
+-- Main AWB Records
+CREATE TABLE IF NOT EXISTS awbs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  awb_number TEXT UNIQUE,
+  issued_by UUID REFERENCES auth.users(id),
+  issued_at TIMESTAMPTZ,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES auth.users(id),
+  status awb_status NOT NULL DEFAULT 'draft',
+  payload JSONB,
+  source_document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  metadata JSONB DEFAULT '{}'::JSONB
+);
+
+CREATE INDEX IF NOT EXISTS awbs_company_idx ON awbs(company_id);
+CREATE INDEX IF NOT EXISTS awbs_company_status_idx ON awbs(company_id, status);
+CREATE INDEX IF NOT EXISTS awbs_issued_at_idx ON awbs(issued_at DESC);
+CREATE INDEX IF NOT EXISTS awbs_created_by_idx ON awbs(created_by);
+
+CREATE TRIGGER awbs_set_updated_at
+  BEFORE UPDATE ON awbs
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Add FK from documents to awbs (now that awbs exists)
+ALTER TABLE documents
+  ADD CONSTRAINT documents_awb_id_fkey FOREIGN KEY (awb_id) REFERENCES awbs(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS documents_awb_idx ON documents(awb_id);
+
+-- AWB History (versioning)
+CREATE TABLE IF NOT EXISTS awb_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  awb_id UUID NOT NULL REFERENCES awbs(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  versioned_by UUID NOT NULL REFERENCES auth.users(id),
+  payload JSONB NOT NULL,
+  change_summary TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS awb_history_awb_idx ON awb_history(awb_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS awb_history_company_idx ON awb_history(company_id);
+
+-- ======================================================
+-- ✅ STEP 4 COMPLETE
+-- Next: Run Step 5 (Audit, Notifications, Usage, Batch)
+-- ======================================================
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA — STEP 5 OF 5
+-- Audit, Notifications, Usage, Batch, Functions & RLS
+-- Run this FIFTH and FINAL (after Step 4)
+-- ======================================================
+
+-- Audit Log (all actions)
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  action audit_action NOT NULL,
+  resource_type TEXT,
+  resource_id UUID,
+  description TEXT,
+  old_values JSONB,
+  new_values JSONB,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS audit_log_company_idx ON audit_log(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log(resource_type, resource_id);
+
+-- Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  recipient_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT,
+  notification_type TEXT,
+  resource_type TEXT,
+  resource_id UUID,
+  is_read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS notifications_company_idx ON notifications(company_id);
+CREATE INDEX IF NOT EXISTS notifications_recipient_idx ON notifications(recipient_id, is_read);
+CREATE INDEX IF NOT EXISTS notifications_created_idx ON notifications(created_at DESC);
+
+-- Usage Logs (billing & quotas)
+CREATE TABLE IF NOT EXISTS usage_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  action TEXT NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  data_size_bytes BIGINT,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS usage_logs_company_idx ON usage_logs(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS usage_logs_action_idx ON usage_logs(company_id, action, created_at DESC);
+
+-- Batch Jobs (multi-document uploads)
+CREATE TABLE IF NOT EXISTS batch_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  batch_name TEXT,
+  total_files INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  processed_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  errors JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS batch_jobs_company_idx ON batch_jobs(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS batch_jobs_status_idx ON batch_jobs(status);
+
+CREATE TRIGGER batch_jobs_set_updated_at
+  BEFORE UPDATE ON batch_jobs
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- FUNCTIONS (now all tables exist)
+-- ======================================================
+
+-- Check company membership
+CREATE OR REPLACE FUNCTION auth_is_member(p_company UUID)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM memberships m
+    WHERE m.company_id = p_company AND m.user_id = auth.uid()
+  );
+$$;
+
+-- Check if user is owner/admin
+CREATE OR REPLACE FUNCTION auth_is_admin(p_company UUID)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM memberships m
+    WHERE m.company_id = p_company
+      AND m.user_id = auth.uid()
+      AND m.role IN ('owner', 'admin')
+  );
+$$;
+
+-- Get AWB stock for a company
+CREATE OR REPLACE FUNCTION get_awb_stock(p_company UUID)
+RETURNS TABLE(total BIGINT, available BIGINT, consumed BIGINT, reserved BIGINT) 
+LANGUAGE SQL STABLE AS $$
+  SELECT
+    COUNT(*)::BIGINT,
+    COUNT(*) FILTER (WHERE status = 'available')::BIGINT,
+    COUNT(*) FILTER (WHERE status = 'consumed')::BIGINT,
+    COUNT(*) FILTER (WHERE status = 'reserved')::BIGINT
+  FROM awb_numbers
+  WHERE company_id = p_company;
+$$;
+
+-- Consume next available AWB number
+CREATE OR REPLACE FUNCTION consume_next_awb_number(p_company UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  r awb_numbers%ROWTYPE;
+BEGIN
+  SELECT * INTO r
+  FROM awb_numbers
+  WHERE company_id = p_company AND status = 'available'
+  ORDER BY added_at ASC
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', FALSE,
+      'awb_number', NULL,
+      'error', 'No available AWB numbers'
+    );
+  END IF;
+
+  UPDATE awb_numbers
+  SET status = 'consumed', consumed_at = NOW(), consumed_by = auth.uid()
+  WHERE id = r.id;
+
+  RETURN jsonb_build_object(
+    'success', TRUE,
+    'awb_number', r.awb_number,
+    'error', NULL
+  );
+END$$;
+
+-- ======================================================
+-- ROW LEVEL SECURITY
+-- ======================================================
+
+ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extraction_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awb_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awb_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE batch_jobs ENABLE ROW LEVEL SECURITY;
+
+-- Profiles: read own
+DROP POLICY IF EXISTS profiles_self_select ON profiles;
+CREATE POLICY profiles_self_select ON profiles FOR SELECT
+  USING (id = auth.uid());
+
+DROP POLICY IF EXISTS profiles_self_update ON profiles;
+CREATE POLICY profiles_self_update ON profiles FOR UPDATE
+  USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+
+-- Memberships: read own
+DROP POLICY IF EXISTS memberships_self_select ON memberships;
+CREATE POLICY memberships_self_select ON memberships FOR SELECT
+  USING (user_id = auth.uid());
+
+-- Memberships: admin manages all
+DROP POLICY IF EXISTS memberships_admin_all ON memberships;
+CREATE POLICY memberships_admin_all ON memberships FOR ALL
+  USING (auth_is_admin(company_id))
+  WITH CHECK (auth_is_admin(company_id));
+
+-- Companies: members can read
+DROP POLICY IF EXISTS companies_member_select ON companies;
+CREATE POLICY companies_member_select ON companies FOR SELECT
+  USING (auth_is_member(id));
+
+-- Companies: owners/admins can update
+DROP POLICY IF EXISTS companies_owner_update ON companies;
+CREATE POLICY companies_owner_update ON companies FOR UPDATE
+  USING (auth_is_admin(id)) WITH CHECK (auth_is_admin(id));
+
+-- Parties: members can do all
+DROP POLICY IF EXISTS parties_member_all ON parties;
+CREATE POLICY parties_member_all ON parties FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- Documents: members can do all
+DROP POLICY IF EXISTS documents_member_all ON documents;
+CREATE POLICY documents_member_all ON documents FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- Extraction Results: members can do all
+DROP POLICY IF EXISTS extraction_results_member_all ON extraction_results;
+CREATE POLICY extraction_results_member_all ON extraction_results FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- AWB Numbers: members can do all
+DROP POLICY IF EXISTS awb_numbers_member_all ON awb_numbers;
+CREATE POLICY awb_numbers_member_all ON awb_numbers FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- AWBs: members can do all
+DROP POLICY IF EXISTS awbs_member_all ON awbs;
+CREATE POLICY awbs_member_all ON awbs FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- AWB History: members can do all
+DROP POLICY IF EXISTS awb_history_member_all ON awb_history;
+CREATE POLICY awb_history_member_all ON awb_history FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- Audit Log: admins can read
+DROP POLICY IF EXISTS audit_log_member_select ON audit_log;
+CREATE POLICY audit_log_member_select ON audit_log FOR SELECT
+  USING (auth_is_admin(company_id));
+
+-- Audit Log: anyone can insert (triggers set company_id)
+DROP POLICY IF EXISTS audit_log_insert ON audit_log;
+CREATE POLICY audit_log_insert ON audit_log FOR INSERT
+  WITH CHECK (TRUE);
+
+-- Notifications: recipient or admin
+DROP POLICY IF EXISTS notifications_member_all ON notifications;
+CREATE POLICY notifications_member_all ON notifications FOR ALL
+  USING (auth_is_member(company_id) AND (recipient_id = auth.uid() OR auth_is_admin(company_id)))
+  WITH CHECK (auth_is_member(company_id));
+
+-- Usage Logs: admins can read
+DROP POLICY IF EXISTS usage_logs_member_select ON usage_logs;
+CREATE POLICY usage_logs_member_select ON usage_logs FOR SELECT
+  USING (auth_is_admin(company_id));
+
+-- Usage Logs: anyone can insert
+DROP POLICY IF EXISTS usage_logs_insert ON usage_logs;
+CREATE POLICY usage_logs_insert ON usage_logs FOR INSERT
+  WITH CHECK (TRUE);
+
+-- Batch Jobs: members can do all
+DROP POLICY IF EXISTS batch_jobs_member_all ON batch_jobs;
+CREATE POLICY batch_jobs_member_all ON batch_jobs FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ======================================================
+-- ✅ ALL STEPS COMPLETE
+-- Schema is ready for use
+-- ======================================================
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA - TESTING & VALIDATION
+-- Run these queries one by one to diagnose issues
+-- ======================================================
+
+-- ======================================================
+-- TEST 1: Verify all tables exist
+-- ======================================================
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+ORDER BY table_name;
+
+-- Expected tables (13 total):
+-- audit_log, awb_history, awb_numbers, awbs, batch_jobs
+-- companies, documents, extraction_results, memberships
+-- notifications, parties, profiles, usage_logs
+
+-- ======================================================
+-- TEST 2: Verify all enums exist
+-- ======================================================
+SELECT typname, typtype 
+FROM pg_type 
+WHERE typname IN ('member_role', 'document_status', 'awb_status', 'awb_number_status', 'audit_action')
+ORDER BY typname;
+
+-- Expected: 5 enums
+
+-- ======================================================
+-- TEST 3: Check for missing triggers
+-- ======================================================
+SELECT trigger_name, event_object_table
+FROM information_schema.triggers 
+WHERE trigger_schema = 'public'
+ORDER BY event_object_table;
+
+-- Expected triggers:
+-- companies_set_updated_at
+-- profiles_set_updated_at
+-- memberships_set_updated_at
+-- parties_set_updated_at
+-- documents_set_updated_at
+-- extraction_results_set_updated_at
+-- awbs_set_updated_at
+-- batch_jobs_set_updated_at
+
+-- ======================================================
+-- TEST 4: Verify functions exist
+-- ======================================================
+SELECT routine_name, routine_type
+FROM information_schema.routines
+WHERE routine_schema = 'public' 
+  AND routine_type = 'FUNCTION'
+ORDER BY routine_name;
+
+-- Expected functions:
+-- auth_is_admin
+-- auth_is_member
+-- consume_next_awb_number
+-- get_awb_stock
+-- set_updated_at
+
+-- ======================================================
+-- TEST 5: Check RLS policies
+-- ======================================================
+SELECT schemaname, tablename, policyname, permissive, roles, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+ORDER BY tablename, policyname;
+
+-- ======================================================
+-- TEST 6: Verify foreign key relationships
+-- ======================================================
+SELECT 
+  constraint_name,
+  table_name,
+  column_name,
+  referenced_table_name,
+  referenced_column_name
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+WHERE constraint_schema = 'public'
+ORDER BY table_name, column_name;
+
+-- ======================================================
+-- TEST 7: Sample data insertion (test multi-tenancy)
+-- ======================================================
+
+-- 7a. Create a test company
+INSERT INTO companies (name, contact_email)
+VALUES ('Test Company Alpha', 'admin@testcompany.local')
+ON CONFLICT (name) DO NOTHING;
+
+-- 7b. List companies
+SELECT id, name, contact_email, created_at FROM companies LIMIT 5;
+
+-- 7c. Get the company ID for next tests (replace UUID below)
+-- Copy the ID from the result above
+
+-- ======================================================
+-- TEST 8: Insert test AWB numbers (IMPORTANT)
+-- ======================================================
+
+-- Replace 'YOUR_COMPANY_ID_HERE' with actual UUID from TEST 7b
+-- Example: '123e4567-e89b-12d3-a456-426614174000'
+
+-- 8a. Insert 50 test AWB numbers
+/*
+WITH c AS (
+  SELECT id FROM companies WHERE name = 'Test Company Alpha' LIMIT 1
+)
+INSERT INTO awb_numbers (company_id, airline_prefix, awb_number, status)
+SELECT 
+  c.id,
+  'LH',
+  CONCAT('724-', LPAD(i::text, 8, '0')),
+  'available'
+FROM generate_series(1, 50) AS i, c
+ON CONFLICT (awb_number) DO NOTHING;
+*/
+
+-- 8b. Check AWB numbers
+SELECT COUNT(*) as total_awb_numbers, 
+       COUNT(*) FILTER (WHERE status = 'available') as available
+FROM awb_numbers 
+WHERE company_id = (SELECT id FROM companies WHERE name = 'Test Company Alpha' LIMIT 1);
+
+-- ======================================================
+-- TEST 9: Test the consume_next_awb_number function
+-- ======================================================
+
+-- This requires auth context, so it needs to be run from your backend
+-- But here's the call structure:
+-- SELECT consume_next_awb_number('YOUR_COMPANY_ID_HERE'::uuid);
+
+-- ======================================================
+-- TEST 10: Test get_awb_stock function
+-- ======================================================
+
+-- Replace 'YOUR_COMPANY_ID_HERE' with actual UUID
+-- SELECT * FROM get_awb_stock('YOUR_COMPANY_ID_HERE'::uuid);
+
+-- ======================================================
+-- TEST 11: Verify RLS is blocking unauthorized access
+-- ======================================================
+
+-- When you test in Supabase, create a user and try:
+-- SELECT * FROM companies; 
+-- Should return 0 rows (unless user is member)
+
+-- SELECT * FROM awb_numbers;
+-- Should return 0 rows (unless user is member of company)
+
+-- ======================================================
+-- TEST 12: Check for any table without updated_at triggers
+-- ======================================================
+
+SELECT 
+  c.table_name,
+  EXISTS(
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = c.table_name AND column_name = 'updated_at'
+  ) as has_updated_at,
+  EXISTS(
+    SELECT 1 FROM information_schema.triggers
+    WHERE event_object_table = c.table_name AND trigger_name LIKE '%updated_at%'
+  ) as has_trigger
+FROM (
+  SELECT table_name FROM information_schema.tables 
+  WHERE table_schema = 'public'
+) c
+ORDER BY c.table_name;
+
+-- ======================================================
+-- TEST 13: Check column definitions for completeness
+-- ======================================================
+
+-- Check companies table
+\d companies
+
+-- Check awbs table
+\d awbs
+
+-- Check documents table
+\d documents
+
+-- Check memberships table
+\d memberships
+
+-- ======================================================
+-- DIAGNOSTIC QUERIES
+-- ======================================================
+
+-- Find tables without primary keys
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+  AND table_name NOT IN (
+    SELECT table_name FROM information_schema.table_constraints 
+    WHERE constraint_type = 'PRIMARY KEY'
+  )
+ORDER BY table_name;
+
+-- Find indexes
+SELECT schemaname, tablename, indexname 
+FROM pg_indexes 
+WHERE schemaname = 'public'
+ORDER BY tablename, indexname;
+
+-- Find constraints
+SELECT constraint_name, table_name, constraint_type
+FROM information_schema.table_constraints
+WHERE table_schema = 'public'
+ORDER BY table_name, constraint_name;
+
+-- ======================================================
+-- END OF TESTS
+-- ======================================================
+
+-- NEXT STEPS:
+-- 1. Run TEST 1-6 to verify schema structure
+-- 2. Run TEST 7 to create sample company
+-- 3. Run TEST 8 to insert AWB numbers
+-- 4. Review any missing tables, triggers, or functions
+-- 5. Report back with any errors
+
+
+-- ======================================================
+-- SEMLOX DATABASE SCHEMA - RELATIONSHIP TESTING
+-- Test all Foreign Keys, Constraints & Data Integrity
+-- ======================================================
+
+-- ======================================================
+-- REL TEST 1: Verify all Foreign Keys exist
+-- ======================================================
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  ccu.column_name AS referenced_column_name,
+  rc.update_rule,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE rc.constraint_schema = 'public'
+ORDER BY kcu.table_name, kcu.column_name;
+
+-- Expected Foreign Keys (15 total):
+-- 1. companies.id ← profiles.id
+-- 2. companies.id ← memberships.company_id
+-- 3. auth.users.id ← memberships.user_id
+-- 4. auth.users.id ← memberships.invited_by
+-- 5. companies.id ← parties.company_id
+-- 6. companies.id ← documents.company_id
+-- 7. auth.users.id ← documents.created_by
+-- 8. awbs.id ← documents.awb_id
+-- 9. companies.id ← extraction_results.company_id
+-- 10. documents.id ← extraction_results.document_id
+-- 11. companies.id ← awb_numbers.company_id
+-- 12. auth.users.id ← awb_numbers.added_by
+-- 13. auth.users.id ← awb_numbers.consumed_by
+-- 14. companies.id ← awbs.company_id
+-- 15. auth.users.id ← awbs.created_by
+-- 16. auth.users.id ← awbs.issued_by
+-- 17. auth.users.id ← awbs.updated_by
+-- 18. documents.id ← awbs.source_document_id
+-- 19. awbs.id ← awb_history.awb_id
+-- 20. companies.id ← awb_history.company_id
+-- 21. auth.users.id ← awb_history.versioned_by
+-- 22. companies.id ← audit_log.company_id
+-- 23. auth.users.id ← audit_log.user_id
+-- 24. companies.id ← notifications.company_id
+-- 25. auth.users.id ← notifications.recipient_id
+-- 26. companies.id ← usage_logs.company_id
+-- 27. auth.users.id ← usage_logs.user_id
+-- 28. companies.id ← batch_jobs.company_id
+-- 29. auth.users.id ← batch_jobs.created_by
+
+-- ======================================================
+-- REL TEST 2: Test Company → Memberships → Users chain
+-- ======================================================
+
+-- 2a. Create test company
+INSERT INTO companies (name, contact_email)
+VALUES ('Relationship Test Company', 'test@rels.local')
+ON CONFLICT (name) DO NOTHING
+RETURNING id as company_id;
+
+-- Note: Copy the company_id from above
+
+-- 2b. Test: Insert membership (should succeed - FK to valid company & user)
+-- WARNING: This requires a valid auth.users.id from your Supabase Auth
+-- For now, just verify the structure exists:
+
+SELECT 
+  'memberships.company_id' as fk_field,
+  'companies.id' as references,
+  'ON DELETE CASCADE' as cascade_rule,
+  COUNT(*) as test_status
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+WHERE kcu.table_name = 'memberships' 
+  AND kcu.column_name = 'company_id';
+
+-- ======================================================
+-- REL TEST 3: Test Cascading Deletes (IMPORTANT!)
+-- ======================================================
+
+-- 3a. Verify all FK relationships have proper cascade rules
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  rc.update_rule,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE rc.constraint_schema = 'public'
+ORDER BY kcu.table_name, kcu.column_name;
+
+-- Expected cascade rules:
+-- Most should be ON DELETE CASCADE (if parent deleted, children auto-deleted)
+-- Some (like documents.awb_id) should be ON DELETE SET NULL (orphan the child)
+
+-- 3b. Test cascade: Delete company should delete all child records
+-- (Don't run this on production! But here's the test structure)
+/*
+WITH deleted_company AS (
+  DELETE FROM companies 
+  WHERE name = 'Relationship Test Company'
+  RETURNING id
+)
+SELECT 
+  'Deleted company' as result,
+  (SELECT COUNT(*) FROM memberships WHERE company_id = (SELECT id FROM deleted_company)) as remaining_memberships,
+  (SELECT COUNT(*) FROM parties WHERE company_id = (SELECT id FROM deleted_company)) as remaining_parties,
+  (SELECT COUNT(*) FROM documents WHERE company_id = (SELECT id FROM deleted_company)) as remaining_documents,
+  (SELECT COUNT(*) FROM awb_numbers WHERE company_id = (SELECT id FROM deleted_company)) as remaining_awb_numbers,
+  (SELECT COUNT(*) FROM awbs WHERE company_id = (SELECT id FROM deleted_company)) as remaining_awbs;
+*/
+
+-- ======================================================
+-- REL TEST 4: Test Documents → AWBs → AWB History chain
+-- ======================================================
+
+-- 4a. Create test company & document
+INSERT INTO companies (name, contact_email)
+VALUES ('Document Test Company', 'doc@test.local')
+ON CONFLICT (name) DO NOTHING
+RETURNING id;
+
+-- Copy returned company_id
+
+-- 4b. Check the relationship path:
+-- company → documents → awbs
+-- company → awbs → awb_history
+
+SELECT 
+  kcu.table_name AS source_table,
+  kcu.column_name AS fk_column,
+  ccu.table_name AS target_table,
+  ccu.column_name AS target_column,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE kcu.table_name IN ('documents', 'awbs', 'awb_history')
+ORDER BY kcu.table_name, kcu.column_name;
+
+-- ======================================================
+-- REL TEST 5: Test AWB Number Consumption Flow
+-- ======================================================
+
+-- 5a. Verify awb_numbers FK relationships
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE kcu.table_name = 'awb_numbers'
+ORDER BY kcu.column_name;
+
+-- Expected FKs:
+-- awb_numbers.company_id → companies.id (ON DELETE CASCADE)
+-- awb_numbers.added_by → auth.users.id
+-- awb_numbers.consumed_by → auth.users.id
+
+-- 5b. Verify awbs FK relationships
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE kcu.table_name = 'awbs'
+ORDER BY kcu.column_name;
+
+-- Expected FKs:
+-- awbs.company_id → companies.id (CASCADE)
+-- awbs.created_by → auth.users.id
+-- awbs.issued_by → auth.users.id
+-- awbs.updated_by → auth.users.id
+-- awbs.source_document_id → documents.id (SET NULL)
+
+-- ======================================================
+-- REL TEST 6: Test Extraction Results → Document chain
+-- ======================================================
+
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE kcu.table_name = 'extraction_results'
+ORDER BY kcu.column_name;
+
+-- Expected:
+-- extraction_results.company_id → companies.id (CASCADE)
+-- extraction_results.document_id → documents.id (CASCADE)
+
+-- ======================================================
+-- REL TEST 7: Test AWB History → AWB chain
+-- ======================================================
+
+SELECT
+  rc.constraint_name,
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table_name,
+  rc.delete_rule
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu 
+  ON rc.constraint_name = kcu.constraint_name
+  AND rc.constraint_schema = kcu.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+  AND rc.unique_constraint_schema = ccu.constraint_schema
+WHERE kcu.table_name = 'awb_history'
+ORDER BY kcu.column_name;
+
+-- Expected:
+-- awb_history.awb_id → awbs.id (CASCADE)
+-- awb_history.company_id → companies.id (CASCADE)
+-- awb_history.versioned_by → auth.users.id
+
+-- ======================================================
+-- REL TEST 8: Test Constraint Violations
+-- ======================================================
+
+-- 8a. Try to insert document with invalid company_id (should fail)
+/*
+INSERT INTO documents (company_id, created_by, filename, status)
+VALUES ('invalid-uuid'::uuid, 'invalid-uuid'::uuid, 'test.pdf', 'uploaded');
+
+-- Expected error: 
+-- ERROR: invalid input syntax for type uuid: "invalid-uuid"
+-- OR: FK constraint violation
+*/
+
+-- 8b. Try to insert awb with invalid company_id (should fail)
+/*
+INSERT INTO awbs (company_id, created_by, status)
+VALUES ('invalid-uuid'::uuid, 'invalid-uuid'::uuid, 'draft');
+*/
+
+-- 8c. Try to insert awb_history without matching company (should fail)
+/*
+INSERT INTO awb_history (awb_id, company_id, versioned_by, payload)
+VALUES ('some-uuid'::uuid, 'wrong-company'::uuid, 'some-user'::uuid, '{}');
+
+-- Expected: FK constraint violation
+*/
+
+-- ======================================================
+-- REL TEST 9: Test Multi-tenancy Isolation (Company → Data)
+-- ======================================================
+
+-- 9a. Create two test companies
+INSERT INTO companies (name, contact_email) VALUES ('Company A', 'a@test.local')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO companies (name, contact_email) VALUES ('Company B', 'b@test.local')
+ON CONFLICT (name) DO NOTHING;
+
+-- 9b. Verify they're separate
+SELECT id, name FROM companies WHERE name IN ('Company A', 'Company B');
+
+-- 9c. Create parties in each company
+WITH c_a AS (SELECT id FROM companies WHERE name = 'Company A'),
+     c_b AS (SELECT id FROM companies WHERE name = 'Company B')
+INSERT INTO parties (company_id, name)
+SELECT id, 'Party in A' FROM c_a
+UNION ALL
+SELECT id, 'Party in B' FROM c_b;
+
+-- 9d. Verify parties are isolated by company_id
+SELECT c.name as company, COUNT(p.id) as party_count
+FROM companies c
+LEFT JOIN parties p ON c.id = p.company_id
+WHERE c.name IN ('Company A', 'Company B')
+GROUP BY c.id, c.name;
+
+-- Expected: Company A has 1 party, Company B has 1 party
+
+-- ======================================================
+-- REL TEST 10: Test Orphaned Records (soft deletes)
+-- ======================================================
+
+-- 10a. Create a document & AWB
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1),
+     d AS (
+       INSERT INTO documents (company_id, created_by, filename, status)
+       SELECT c.id, auth.uid(), 'test.pdf', 'uploaded'
+       FROM c
+       RETURNING id, company_id
+     ),
+     a AS (
+       INSERT INTO awbs (company_id, created_by, status, source_document_id)
+       SELECT d.company_id, auth.uid(), 'draft', d.id
+       FROM d
+       RETURNING id, source_document_id
+     )
+SELECT 'Created document & AWB' as result;
+
+-- 10b. Delete the document (AWB should remain but source_document_id becomes NULL)
+-- This tests ON DELETE SET NULL behavior
+
+-- ======================================================
+-- REL TEST 11: Test Unique Constraints
+-- ======================================================
+
+-- 11a. Verify unique constraints exist
+SELECT
+  constraint_name,
+  table_name,
+  column_name
+FROM information_schema.constraint_column_usage
+WHERE table_schema = 'public' 
+  AND constraint_name LIKE '%unique%'
+ORDER BY table_name, constraint_name;
+
+-- Expected unique constraints:
+-- companies.name
+-- awb_numbers.awb_number
+-- awb_numbers(company_id, awb_number) - composite
+-- parties(company_id, name) - composite
+-- awbs.awb_number
+
+-- 11b. Test: Insert duplicate company name (should fail)
+/*
+INSERT INTO companies (name, contact_email) VALUES ('Company A', 'duplicate@test.local');
+-- Expected error: duplicate key value violates unique constraint
+*/
+
+-- 11c. Test: Insert duplicate AWB number globally (should fail)
+/*
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1)
+INSERT INTO awb_numbers (company_id, airline_prefix, awb_number, status)
+SELECT c.id, 'LH', '724-00000001', 'available'
+UNION ALL
+SELECT c.id, 'LH', '724-00000001', 'available';
+-- Expected: duplicate key value violates unique constraint
+*/
+
+-- ======================================================
+-- REL TEST 12: Test Check Constraints
+-- ======================================================
+
+-- 12a. List all check constraints
+SELECT
+  constraint_name,
+  table_name,
+  constraint_definition
+FROM information_schema.check_constraints
+WHERE constraint_schema = 'public'
+ORDER BY table_name;
+
+-- (Most checks are handled by enums, not explicit CHECK clauses)
+
+-- ======================================================
+-- REL TEST 13: Test Enum Constraints
+-- ======================================================
+
+-- 13a. Try to insert invalid enum value (should fail)
+/*
+INSERT INTO memberships (company_id, user_id, role)
+VALUES ('some-uuid'::uuid, 'some-uuid'::uuid, 'invalid_role');
+-- Expected: invalid enum value
+*/
+
+-- 13b. Try to insert invalid document status (should fail)
+/*
+INSERT INTO documents (company_id, created_by, filename, status)
+VALUES ('some-uuid'::uuid, 'some-uuid'::uuid, 'test.pdf', 'invalid_status');
+-- Expected: invalid enum value
+*/
+
+-- ======================================================
+-- REL TEST 14: Test Referential Integrity Report
+-- ======================================================
+
+-- 14a. Find any orphaned records (records with invalid FKs)
+-- This should return 0 rows if all relationships are valid
+
+-- Orphaned documents (company doesn't exist)
+SELECT 'orphaned_documents' as issue, COUNT(*) as count
+FROM documents d
+LEFT JOIN companies c ON d.company_id = c.id
+WHERE c.id IS NULL;
+
+-- Orphaned awbs (company doesn't exist)
+SELECT 'orphaned_awbs' as issue, COUNT(*) as count
+FROM awbs a
+LEFT JOIN companies c ON a.company_id = c.id
+WHERE c.id IS NULL;
+
+-- Orphaned extraction_results (document doesn't exist)
+SELECT 'orphaned_extraction_results' as issue, COUNT(*) as count
+FROM extraction_results er
+LEFT JOIN documents d ON er.document_id = d.id
+WHERE d.id IS NULL;
+
+-- Orphaned awb_numbers (company doesn't exist)
+SELECT 'orphaned_awb_numbers' as issue, COUNT(*) as count
+FROM awb_numbers an
+LEFT JOIN companies c ON an.company_id = c.id
+WHERE c.id IS NULL;
+
+-- ======================================================
+-- REL TEST 15: Test Complete Data Flow
+-- ======================================================
+
+-- 15a. Simulate complete workflow:
+-- Company → Parties → Documents → Extraction → AWBs → History
+
+/*
+-- Step 1: Create company (already done, use Company A)
+-- Step 2: Create party
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1)
+INSERT INTO parties (company_id, name, party_type)
+SELECT c.id, 'Test Shipper', 'shipper'
+RETURNING id, company_id;
+
+-- Step 3: Create AWB numbers (already done in earlier tests)
+
+-- Step 4: Create document
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1)
+INSERT INTO documents (company_id, created_by, filename, status)
+SELECT c.id, auth.uid(), 'awb_document.pdf', 'uploaded'
+RETURNING id;
+
+-- Step 5: Extract results
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1),
+     d AS (SELECT id FROM documents WHERE filename = 'awb_document.pdf' LIMIT 1)
+INSERT INTO extraction_results (company_id, document_id, extracted_data, average_confidence)
+SELECT c.id, d.id, '{"shipper": "test", "consignee": "test"}'::jsonb, 95
+RETURNING id;
+
+-- Step 6: Create AWB from document
+WITH c AS (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1),
+     d AS (SELECT id FROM documents WHERE filename = 'awb_document.pdf' LIMIT 1)
+INSERT INTO awbs (company_id, created_by, status, source_document_id, payload)
+SELECT c.id, auth.uid(), 'draft', d.id, '{"shipper": "test", "consignee": "test"}'::jsonb
+RETURNING id;
+
+-- Step 7: Create audit log
+INSERT INTO audit_log (company_id, user_id, action, resource_type, resource_id, description)
+SELECT 
+  (SELECT id FROM companies WHERE name = 'Company A' LIMIT 1),
+  auth.uid(),
+  'create'::audit_action,
+  'awb',
+  id,
+  'AWB created from document'
+FROM awbs 
+WHERE source_document_id = (SELECT id FROM documents WHERE filename = 'awb_document.pdf' LIMIT 1);
+
+-- Step 8: Record history
+WITH a AS (SELECT id, company_id FROM awbs WHERE source_document_id = (SELECT id FROM documents WHERE filename = 'awb_document.pdf' LIMIT 1) LIMIT 1),
+     p AS (SELECT payload FROM awbs WHERE id = (SELECT id FROM a) LIMIT 1)
+INSERT INTO awb_history (awb_id, company_id, versioned_by, payload, change_summary)
+SELECT a.id, a.company_id, auth.uid(), p.payload, 'Initial creation'
+FROM a, p;
+
+-- Step 9: Verify complete flow
+SELECT 
+  'Company' as entity,
+  (SELECT COUNT(*) FROM companies WHERE name = 'Company A') as count
+UNION ALL
+SELECT 'Parties', (SELECT COUNT(*) FROM parties WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'))
+UNION ALL
+SELECT 'Documents', (SELECT COUNT(*) FROM documents WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'))
+UNION ALL
+SELECT 'Extraction Results', (SELECT COUNT(*) FROM extraction_results WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'))
+UNION ALL
+SELECT 'AWBs', (SELECT COUNT(*) FROM awbs WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'))
+UNION ALL
+SELECT 'AWB History', (SELECT COUNT(*) FROM awb_history WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'))
+UNION ALL
+SELECT 'Audit Log', (SELECT COUNT(*) FROM audit_log WHERE company_id = (SELECT id FROM companies WHERE name = 'Company A'));
+
+-- Expected: All counts > 0
+*/
+
+-- ======================================================
+-- SUMMARY
+-- ======================================================
+
+-- All tests should verify:
+-- ✅ All FK relationships exist with correct references
+-- ✅ Cascade rules work (DELETE cascade, SET NULL where appropriate)
+-- ✅ Unique constraints prevent duplicates
+-- ✅ Enum constraints enforce valid values
+-- ✅ Multi-tenancy isolation (company_id in all tables)
+-- ✅ No orphaned records
+-- ✅ Complete data flow works end-to-end
+
+-- ======================================================
+
+
+
+-- ======================================================
+-- SEMLOX v2 Database Schema (Complete)
+-- Supabase PostgreSQL with Auth, Multi-tenancy, Audit
+-- Last updated: May 2026
+-- ======================================================
+
+-- ======================================================
+-- PHASE 0: EXTENSIONS & ENUMS
+-- ======================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Member roles (who can do what)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_role') THEN
+    CREATE TYPE member_role AS ENUM ('owner', 'admin', 'manager', 'operator', 'viewer');
+  END IF;
+END$$;
+
+-- AWB document status (full lifecycle)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_status') THEN
+    CREATE TYPE document_status AS ENUM (
+      'uploaded',      -- PDF received
+      'processing',    -- AI extraction in progress
+      'extracted',     -- Fields extracted, awaiting review
+      'reviewed',      -- User reviewed & corrected
+      'issued',        -- AWB number assigned & finalized
+      'failed'         -- Processing failed (stored reason in errors JSONB)
+    );
+  END IF;
+END$$;
+
+-- AWB draft/issued status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'awb_status') THEN
+    CREATE TYPE awb_status AS ENUM ('draft', 'issued', 'cancelled');
+  END IF;
+END$$;
+
+-- AWB number inventory status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'awb_number_status') THEN
+    CREATE TYPE awb_number_status AS ENUM ('available', 'reserved', 'consumed', 'cancelled');
+  END IF;
+END$$;
+
+-- Audit action type
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'audit_action') THEN
+    CREATE TYPE audit_action AS ENUM (
+      'create', 'update', 'delete', 'login', 'logout', 'export', 'issue', 'approve'
+    );
+  END IF;
+END$$;
+
+-- ======================================================
+-- PHASE 1: UTILITY FUNCTIONS (Basic, no table deps yet)
+-- ======================================================
+
+-- Generic updated_at trigger
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END$$;
+
+-- Atomic: consume next available AWB number for a company
+CREATE OR REPLACE FUNCTION consume_next_awb_number(p_company UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  r awb_numbers%ROWTYPE;
+BEGIN
+  SELECT * INTO r
+  FROM awb_numbers
+  WHERE company_id = p_company AND status = 'available'
+  ORDER BY added_at ASC
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', FALSE,
+      'awb_number', NULL,
+      'error', 'No available AWB numbers in inventory'
+    );
+  END IF;
+
+  UPDATE awb_numbers
+  SET status = 'consumed', consumed_at = NOW(), consumed_by = auth.uid()
+  WHERE id = r.id;
+
+  RETURN jsonb_build_object(
+    'success', TRUE,
+    'awb_number', r.awb_number,
+    'error', NULL
+  );
+END$$;
+
+-- Get remaining AWB stock for a company
+CREATE OR REPLACE FUNCTION get_awb_stock(p_company UUID)
+RETURNS TABLE(total BIGINT, available BIGINT, consumed BIGINT, reserved BIGINT) 
+LANGUAGE SQL STABLE AS $$
+  SELECT
+    COUNT(*)::BIGINT AS total,
+    COUNT(*) FILTER (WHERE status = 'available')::BIGINT AS available,
+    COUNT(*) FILTER (WHERE status = 'consumed')::BIGINT AS consumed,
+    COUNT(*) FILTER (WHERE status = 'reserved')::BIGINT AS reserved
+  FROM awb_numbers
+  WHERE company_id = p_company;
+$$;
+
+-- ======================================================
+-- PHASE 2: CORE TABLES (Multi-tenancy foundation)
+-- ======================================================
+
+-- Organizations/Companies
+CREATE TABLE IF NOT EXISTS companies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  logo_url TEXT,
+  headquarters_address TEXT,
+  tax_id TEXT,
+  contact_email TEXT NOT NULL,
+  phone TEXT,
+  timezone TEXT DEFAULT 'UTC',
+  
+  -- Quota & limits
+  awb_stock_threshold INTEGER DEFAULT 50,
+  max_team_members INTEGER DEFAULT 20,
+  monthly_quota INTEGER DEFAULT 10000,
+  
+  -- Settings
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT companies_unique_name UNIQUE(name)
+);
+
+CREATE INDEX IF NOT EXISTS companies_created_idx ON companies(created_at DESC);
+
+CREATE TRIGGER companies_set_updated_at
+  BEFORE UPDATE ON companies
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 3: AUTH & TEAM MANAGEMENT
+-- ======================================================
+
+-- Profiles: extend Supabase auth.users
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- Personal
+  full_name TEXT,
+  job_title TEXT,
+  phone TEXT,
+  avatar_url TEXT,
+  
+  -- Location
+  city TEXT,
+  country TEXT,
+  postal_code TEXT,
+  timezone TEXT DEFAULT 'UTC',
+  
+  -- Status
+  is_active BOOLEAN DEFAULT TRUE,
+  deleted_at TIMESTAMPTZ,
+  
+  -- Metadata (preferences, theme, locale, etc.)
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS profiles_fullname_idx ON profiles(LOWER(full_name));
+CREATE INDEX IF NOT EXISTS profiles_active_idx ON profiles(is_active);
+
+CREATE TRIGGER profiles_set_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Team memberships: which users belong to which company
+CREATE TABLE IF NOT EXISTS memberships (
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  role member_role NOT NULL DEFAULT 'operator',
+  
+  -- Invitation & onboarding
+  invited_by UUID REFERENCES auth.users(id),
+  invited_at TIMESTAMPTZ,
+  accepted_at TIMESTAMPTZ,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  PRIMARY KEY (company_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS memberships_user_idx ON memberships(user_id);
+CREATE INDEX IF NOT EXISTS memberships_role_idx ON memberships(company_id, role);
+
+CREATE TRIGGER memberships_set_updated_at
+  BEFORE UPDATE ON memberships
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 4: PARTY MANAGEMENT (Shippers/Consignees)
+-- ======================================================
+
+CREATE TABLE IF NOT EXISTS parties (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  
+  name TEXT NOT NULL,
+  account_no TEXT,
+  address TEXT,
+  phone TEXT,
+  email TEXT,
+  
+  -- Classification
+  party_type TEXT,  -- 'shipper', 'consignee', 'agent', etc.
+  country_code TEXT,
+  
+  -- Metadata
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT parties_unique_name_per_company UNIQUE(company_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS parties_company_idx ON parties(company_id);
+CREATE INDEX IF NOT EXISTS parties_type_idx ON parties(company_id, party_type);
+CREATE INDEX IF NOT EXISTS parties_name_idx ON parties(LOWER(name));
+
+CREATE TRIGGER parties_set_updated_at
+  BEFORE UPDATE ON parties
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 5: DOCUMENT MANAGEMENT (PDFs, uploads, extraction)
+-- ======================================================
+
+-- Uploaded documents (PDFs)
+CREATE TABLE IF NOT EXISTS documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  
+  -- File metadata
+  filename TEXT NOT NULL,
+  file_size_bytes BIGINT,
+  file_url TEXT,  -- Supabase Storage URL or external CDN
+  mime_type TEXT DEFAULT 'application/pdf',
+  
+  -- Document status (uploaded → processing → extracted → reviewed → issued)
+  status document_status NOT NULL DEFAULT 'uploaded',
+  
+  -- Reference to AWB (if this document becomes an issued AWB)
+  awb_id UUID REFERENCES awbs(id) ON DELETE SET NULL,
+  
+  -- Error tracking (if processing failed)
+  errors JSONB,  -- e.g. {"extraction_failed": "OCR error", "timestamp": "..."}
+  
+  -- Processing metadata
+  processing_started_at TIMESTAMPTZ,
+  processing_completed_at TIMESTAMPTZ,
+  processing_duration_ms INTEGER,  -- milliseconds taken
+  
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS documents_company_idx ON documents(company_id);
+CREATE INDEX IF NOT EXISTS documents_status_idx ON documents(company_id, status);
+CREATE INDEX IF NOT EXISTS documents_awb_idx ON documents(awb_id);
+CREATE INDEX IF NOT EXISTS documents_created_idx ON documents(created_at DESC);
+
+CREATE TRIGGER documents_set_updated_at
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 6: EXTRACTION RESULTS (AI output + confidence)
+-- ======================================================
+
+-- Extraction results: confidence scores & field data
+CREATE TABLE IF NOT EXISTS extraction_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  
+  -- The extracted data (form fields as JSONB)
+  extracted_data JSONB NOT NULL,  -- e.g. {"shipper_name": "Airbus", "consignee": "Delta", ...}
+  
+  -- Confidence scores per field (0-100)
+  confidence_scores JSONB DEFAULT '{}'::JSONB,  -- e.g. {"shipper_name": 95, "consignee": 87, ...}
+  
+  -- Average confidence across all fields
+  average_confidence NUMERIC(5,2),
+  
+  -- Model/engine info
+  extraction_model TEXT,  -- e.g. "claude-3-opus", "gpt-4-turbo"
+  extraction_version TEXT,  -- version of extraction engine
+  
+  -- Processing details
+  processing_time_ms INTEGER,
+  token_usage JSONB,  -- {"input_tokens": 500, "output_tokens": 200}
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS extraction_results_document_idx ON extraction_results(document_id);
+CREATE INDEX IF NOT EXISTS extraction_results_company_idx ON extraction_results(company_id);
+CREATE INDEX IF NOT EXISTS extraction_results_confidence_idx ON extraction_results(average_confidence DESC);
+
+CREATE TRIGGER extraction_results_set_updated_at
+  BEFORE UPDATE ON extraction_results
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 7: AWB CORE (Air Waybill records)
+-- ======================================================
+
+-- AWB numbers inventory (CSV-style: one row = one AWB number)
+CREATE TABLE IF NOT EXISTS awb_numbers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  
+  airline_prefix TEXT,  -- e.g. "LH" for Lufthansa
+  awb_number TEXT NOT NULL UNIQUE,  -- e.g. "724-00000001"
+  
+  status awb_number_status NOT NULL DEFAULT 'available',
+  
+  -- Consumption tracking
+  added_by UUID REFERENCES auth.users(id),
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  consumed_at TIMESTAMPTZ,
+  consumed_by UUID REFERENCES auth.users(id),
+  
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  CONSTRAINT awb_numbers_unique_per_company UNIQUE(company_id, awb_number)
+);
+
+CREATE INDEX IF NOT EXISTS awb_numbers_company_status_idx ON awb_numbers(company_id, status);
+CREATE INDEX IF NOT EXISTS awb_numbers_available_idx ON awb_numbers(company_id) WHERE status = 'available';
+
+-- Main AWB records (documents that have been processed & issued)
+CREATE TABLE IF NOT EXISTS awbs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  
+  -- Issuance
+  awb_number TEXT UNIQUE,  -- Assigned when issued (matches awb_numbers.awb_number)
+  issued_by UUID REFERENCES auth.users(id),
+  issued_at TIMESTAMPTZ,
+  
+  -- Creation & ownership
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES auth.users(id),
+  
+  -- Status
+  status awb_status NOT NULL DEFAULT 'draft',
+  
+  -- Extracted & user-edited form data (JSONB)
+  payload JSONB,  -- Full AWB form fields
+  
+  -- Document reference
+  source_document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  
+  metadata JSONB DEFAULT '{}'::JSONB
+);
+
+CREATE INDEX IF NOT EXISTS awbs_company_idx ON awbs(company_id);
+CREATE INDEX IF NOT EXISTS awbs_company_status_idx ON awbs(company_id, status);
+CREATE INDEX IF NOT EXISTS awbs_issued_at_idx ON awbs(issued_at DESC);
+CREATE INDEX IF NOT EXISTS awbs_created_by_idx ON awbs(created_by);
+
+CREATE TRIGGER awbs_set_updated_at
+  BEFORE UPDATE ON awbs
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 8: VERSIONING & HISTORY
+-- ======================================================
+
+-- AWB edit history (every save creates a snapshot)
+CREATE TABLE IF NOT EXISTS awb_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  awb_id UUID NOT NULL REFERENCES awbs(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  
+  -- Who made the change
+  versioned_by UUID NOT NULL REFERENCES auth.users(id),
+  
+  -- What changed
+  payload JSONB NOT NULL,  -- Full snapshot of the AWB at this point
+  change_summary TEXT,  -- e.g. "Updated shipper address"
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS awb_history_awb_idx ON awb_history(awb_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS awb_history_company_idx ON awb_history(company_id);
+
+-- ======================================================
+-- PHASE 9: AUDIT LOG (All actions)
+-- ======================================================
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  
+  -- Who & what
+  user_id UUID REFERENCES auth.users(id),
+  action audit_action NOT NULL,
+  resource_type TEXT,  -- 'awb', 'document', 'user', 'company'
+  resource_id UUID,  -- ID of the thing being acted upon
+  
+  -- Details
+  description TEXT,
+  old_values JSONB,  -- Before state (for updates)
+  new_values JSONB,  -- After state
+  ip_address INET,
+  user_agent TEXT,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS audit_log_company_idx ON audit_log(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log(resource_type, resource_id);
+
+-- ======================================================
+-- PHASE 10: NOTIFICATIONS & ALERTS
+-- ======================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  recipient_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- Notification content
+  title TEXT NOT NULL,
+  message TEXT,
+  notification_type TEXT,  -- 'low_stock', 'processing_complete', 'approval_needed', etc.
+  
+  -- Link to relevant resource
+  resource_type TEXT,  -- 'awb', 'document'
+  resource_id UUID,
+  
+  -- Status
+  is_read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMPTZ,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS notifications_company_idx ON notifications(company_id);
+CREATE INDEX IF NOT EXISTS notifications_recipient_idx ON notifications(recipient_id, is_read);
+CREATE INDEX IF NOT EXISTS notifications_created_idx ON notifications(created_at DESC);
+
+-- ======================================================
+-- PHASE 11: USAGE TRACKING (For billing/quotas)
+-- ======================================================
+
+CREATE TABLE IF NOT EXISTS usage_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  
+  -- Action tracked
+  action TEXT NOT NULL,  -- 'document_uploaded', 'awb_issued', 'api_call'
+  
+  -- Volume
+  quantity INTEGER DEFAULT 1,
+  data_size_bytes BIGINT,
+  
+  -- Metadata
+  metadata JSONB DEFAULT '{}'::JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS usage_logs_company_idx ON usage_logs(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS usage_logs_action_idx ON usage_logs(company_id, action, created_at DESC);
+
+-- ======================================================
+-- PHASE 12: BATCH OPERATIONS (Multi-document uploads)
+-- ======================================================
+
+CREATE TABLE IF NOT EXISTS batch_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  
+  -- Batch metadata
+  batch_name TEXT,
+  total_files INTEGER NOT NULL,
+  
+  -- Processing state
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending, processing, completed, failed
+  processed_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  
+  -- Timing
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  
+  -- Errors
+  errors JSONB,
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS batch_jobs_company_idx ON batch_jobs(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS batch_jobs_status_idx ON batch_jobs(status);
+
+CREATE TRIGGER batch_jobs_set_updated_at
+  BEFORE UPDATE ON batch_jobs
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ======================================================
+-- PHASE 12.5: MEMBERSHIP-DEPENDENT FUNCTIONS (After memberships table exists)
+-- ======================================================
+
+-- Check company membership (used in RLS policies)
+CREATE OR REPLACE FUNCTION auth_is_member(p_company UUID)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM memberships m
+    WHERE m.company_id = p_company AND m.user_id = auth.uid()
+  );
+$$;
+
+-- Check if user is company owner/admin
+CREATE OR REPLACE FUNCTION auth_is_admin(p_company UUID)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM memberships m
+    WHERE m.company_id = p_company
+      AND m.user_id = auth.uid()
+      AND m.role IN ('owner', 'admin')
+  );
+$$;
+
+-- ======================================================
+-- PHASE 14: ROW LEVEL SECURITY (Enforce multi-tenancy)
+-- ======================================================
+
+-- Enable RLS on all tables
+ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extraction_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awb_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE awb_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE batch_jobs ENABLE ROW LEVEL SECURITY;
+
+-- ─── Profiles ───
+DROP POLICY IF EXISTS profiles_self_select ON profiles;
+CREATE POLICY profiles_self_select ON profiles FOR SELECT
+  USING (id = auth.uid());
+
+DROP POLICY IF EXISTS profiles_self_update ON profiles;
+CREATE POLICY profiles_self_update ON profiles FOR UPDATE
+  USING (id = auth.uid())
+  WITH CHECK (id = auth.uid());
+
+-- ─── Memberships ───
+DROP POLICY IF EXISTS memberships_self_select ON memberships;
+CREATE POLICY memberships_self_select ON memberships FOR SELECT
+  USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS memberships_admin_all ON memberships;
+CREATE POLICY memberships_admin_all ON memberships FOR ALL
+  USING (auth_is_admin(company_id))
+  WITH CHECK (auth_is_admin(company_id));
+
+-- ─── Companies ───
+DROP POLICY IF EXISTS companies_member_select ON companies;
+CREATE POLICY companies_member_select ON companies FOR SELECT
+  USING (auth_is_member(id));
+
+DROP POLICY IF EXISTS companies_owner_update ON companies;
+CREATE POLICY companies_owner_update ON companies FOR UPDATE
+  USING (auth_is_admin(id))
+  WITH CHECK (auth_is_admin(id));
+
+-- ─── Parties ───
+DROP POLICY IF EXISTS parties_member_all ON parties;
+CREATE POLICY parties_member_all ON parties FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── Documents ───
+DROP POLICY IF EXISTS documents_member_all ON documents;
+CREATE POLICY documents_member_all ON documents FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── Extraction Results ───
+DROP POLICY IF EXISTS extraction_results_member_all ON extraction_results;
+CREATE POLICY extraction_results_member_all ON extraction_results FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── AWB Numbers ───
+DROP POLICY IF EXISTS awb_numbers_member_all ON awb_numbers;
+CREATE POLICY awb_numbers_member_all ON awb_numbers FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── AWBs ───
+DROP POLICY IF EXISTS awbs_member_all ON awbs;
+CREATE POLICY awbs_member_all ON awbs FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── AWB History ───
+DROP POLICY IF EXISTS awb_history_member_all ON awb_history;
+CREATE POLICY awb_history_member_all ON awb_history FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── Audit Log ───
+DROP POLICY IF EXISTS audit_log_member_select ON audit_log;
+CREATE POLICY audit_log_member_select ON audit_log FOR SELECT
+  USING (auth_is_admin(company_id));
+
+DROP POLICY IF EXISTS audit_log_insert ON audit_log;
+CREATE POLICY audit_log_insert ON audit_log FOR INSERT
+  WITH CHECK (TRUE);  -- Anyone can insert, triggers will set company_id
+
+-- ─── Notifications ───
+DROP POLICY IF EXISTS notifications_recipient_all ON notifications;
+CREATE POLICY notifications_recipient_all ON notifications FOR ALL
+  USING (auth_is_member(company_id) AND (recipient_id = auth.uid() OR auth_is_admin(company_id)))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ─── Usage Logs ───
+DROP POLICY IF EXISTS usage_logs_member_select ON usage_logs;
+CREATE POLICY usage_logs_member_select ON usage_logs FOR SELECT
+  USING (auth_is_admin(company_id));
+
+DROP POLICY IF EXISTS usage_logs_insert ON usage_logs;
+CREATE POLICY usage_logs_insert ON usage_logs FOR INSERT
+  WITH CHECK (TRUE);
+
+-- ─── Batch Jobs ───
+DROP POLICY IF EXISTS batch_jobs_member_all ON batch_jobs;
+CREATE POLICY batch_jobs_member_all ON batch_jobs FOR ALL
+  USING (auth_is_member(company_id))
+  WITH CHECK (auth_is_member(company_id));
+
+-- ======================================================
+-- PHASE 15: SAMPLE DATA (optional, for testing)
+-- ======================================================
+
+-- Uncomment to populate test data:
+/*
+-- Insert a test company
+INSERT INTO companies (name, contact_email) VALUES ('DB Schenker Test', 'ops@schenker.test');
+
+-- Get company ID for subsequent inserts
+WITH c AS (SELECT id FROM companies WHERE name = 'DB Schenker Test' LIMIT 1)
+INSERT INTO awb_numbers (company_id, airline_prefix, awb_number, added_by)
+SELECT c.id, 'LH', CONCAT('724-', LPAD(i::text, 8, '0')), auth.uid()
+FROM generate_series(1, 100) AS i, c;
+*/
+
+-- ======================================================
+-- END OF SCHEMA
+-- ======================================================
