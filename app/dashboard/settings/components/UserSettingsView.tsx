@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type UserSettingsViewProps = {
   companyId?: string | null;
   role?: string | null;
+  initialSection?: UserSection;
   activeSection?: UserSection;
   onSectionChange?: (section: UserSection) => void;
   showNavigation?: boolean;
@@ -469,11 +470,12 @@ function useUserProfile(companyId?: string | null) {
 export default function UserSettingsView({
   companyId,
   role,
+  initialSection = "profile",
   activeSection: controlledSection,
   onSectionChange,
   showNavigation = true,
 }: UserSettingsViewProps) {
-  const [localSection, setLocalSection] = useState<UserSection>("profile");
+  const [localSection, setLocalSection] = useState<UserSection>(initialSection);
   const activeSection = controlledSection || localSection;
   const selectSection = onSectionChange || setLocalSection;
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
@@ -567,13 +569,13 @@ export default function UserSettingsView({
                   key={item.id}
                   type="button"
                   onClick={() => selectSection(item.id)}
-                  className={`flex h-[34px] w-full items-center gap-2 rounded-[6px] px-3 text-left text-[11px] font-semibold ${
+                  className={`settings-user-nav-item flex h-[34px] w-full items-center gap-2 rounded-[6px] px-3 text-left text-[11px] font-semibold ${
                     isActive
-                      ? "border border-[#1B3B73] bg-[#0D1B35] text-white"
-                      : "text-[#64748B] hover:bg-white/[0.03] hover:text-[#94A3B8]"
+                      ? "settings-user-nav-item-active border"
+                      : "settings-user-nav-item-inactive"
                   }`}
                 >
-                  <Icon className={`h-3.5 w-3.5 ${isActive ? "text-[#2F80FF]" : ""}`} />
+                  <Icon className="h-3.5 w-3.5" />
                   {item.label}
                 </button>
               );
@@ -843,10 +845,10 @@ export default function UserSettingsView({
                         key={String(value)}
                         type="button"
                         onClick={() => setPreferences((prev) => ({ ...prev, theme: String(value) }))}
-                        className={`flex h-10 items-center justify-center gap-2 rounded-[8px] border text-[12px] font-semibold ${
+                        className={`settings-theme-option flex h-10 items-center justify-center gap-2 rounded-[8px] border text-[12px] font-semibold ${
                           preferences.theme === value
-                            ? "border-[#2F80FF] bg-[#0D1B35] text-white"
-                            : "border-white/[0.10] bg-white/[0.025] text-[#64748B]"
+                            ? "settings-theme-option-active"
+                            : "settings-theme-option-inactive"
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />

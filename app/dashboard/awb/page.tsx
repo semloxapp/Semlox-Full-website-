@@ -361,7 +361,7 @@ function ProcessingView({
         </h2>
 
         <p className="mt-2 max-w-[250px] text-[9px] leading-[1.4] text-[#64748b]">
-          {error || "SemLoX is extracting and validating the standard AWB fields from your document."}
+          {error || "Extracting AWB fields..."}
         </p>
 
         {error ? (
@@ -506,34 +506,34 @@ function AwbDocumentPreview({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#0d1321] px-3 py-2">
+      <div className="awb-preview-review-summary flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#0d1321] px-3 py-2">
         <div className="mr-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[#64748b]">
           Review summary
         </div>
-        <div className="flex items-center gap-1.5 rounded-[6px] border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[9px] text-[#a7f3d0]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" />
+        <div className="awb-preview-status-chip awb-preview-status-chip-extracted flex items-center gap-1.5 rounded-[6px] border border-emerald-400/35 bg-emerald-400/[0.12] px-2.5 py-1 text-[9px] font-medium text-emerald-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
           Extracted
-          <strong className="font-mono text-[10px] text-white">
+          <strong className="font-mono text-[10px] text-emerald-100">
             {reviewStats.extracted}
           </strong>
         </div>
-        <div className="flex items-center gap-1.5 rounded-[6px] border border-amber-400/20 bg-amber-400/[0.08] px-2.5 py-1 text-[9px] text-[#fde68a]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24]" />
+        <div className="awb-preview-status-chip awb-preview-status-chip-review flex items-center gap-1.5 rounded-[6px] border border-amber-400/35 bg-amber-400/[0.12] px-2.5 py-1 text-[9px] font-medium text-amber-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
           Review
-          <strong className="font-mono text-[10px] text-white">
+          <strong className="font-mono text-[10px] text-amber-100">
             {reviewStats.review}
           </strong>
         </div>
-        <div className="flex items-center gap-1.5 rounded-[6px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[9px] text-[#94a3b8]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#64748b]" />
+        <div className="awb-preview-status-chip awb-preview-status-chip-empty flex items-center gap-1.5 rounded-[6px] border border-slate-400/25 bg-slate-400/[0.1] px-2.5 py-1 text-[9px] font-medium text-slate-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
           Empty
-          <strong className="font-mono text-[10px] text-white">
+          <strong className="font-mono text-[10px] text-slate-100">
             {reviewStats.empty}
           </strong>
         </div>
-        <div className="ml-auto flex items-center gap-1.5 rounded-[6px] border border-[#2f80ff]/25 bg-[#2f80ff]/10 px-2.5 py-1 text-[9px] text-[#93c5fd]">
+        <div className="awb-preview-status-chip awb-preview-status-chip-confidence ml-auto flex items-center gap-1.5 rounded-[6px] border border-[#2f80ff]/40 bg-[#2f80ff]/15 px-2.5 py-1 text-[9px] font-medium text-blue-200">
           AI Conf
-          <strong className="font-mono text-[10px] text-white">
+          <strong className="font-mono text-[10px] text-blue-100">
             {reviewStats.averageConfidence == null
               ? "--"
               : `${reviewStats.averageConfidence}%`}
@@ -595,7 +595,7 @@ function AwbDocumentPreview({
         )}
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-white/[0.08] bg-[#0d1321] px-3 py-3">
+      <div className="awb-preview-actions flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-white/[0.08] bg-[#0d1321] px-3 py-3">
         <button
           type="button"
           onClick={onSaveDraft}
@@ -1332,7 +1332,7 @@ function ExtractedFieldsPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.03]">
+    <div className="awb-extracted-fields-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.03]">
       <div className="flex h-10 shrink-0 items-center border-b border-white/[0.08] px-3">
         <div className="text-[12px] font-extrabold">Extracted Fields</div>
         <span className="ml-2 rounded bg-[#00d4aa]/15 px-2 py-1 font-mono text-[9px] text-[#00d4aa]">
@@ -1346,7 +1346,7 @@ function ExtractedFieldsPanel({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-white/[0.08] px-3 py-2.5">
+      <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-white/[0.08] px-3 py-2">
         {filters.map((item) => {
           const count = extraction.fields.filter((field) => matchesFilter(field, item.key)).length;
           const active = filter === item.key;
@@ -1356,10 +1356,10 @@ function ExtractedFieldsPanel({
               type="button"
               onClick={() => selectFilter(item.key)}
               aria-pressed={active}
-              className={`h-7 rounded-[6px] border px-2.5 text-[9px] font-bold transition ${
+              className={`h-[24px] rounded-[5px] border px-2 text-[11px] font-medium leading-none transition ${
                 active
-                  ? "border-[#2f80ff]/60 bg-[#2f80ff]/20 text-[#93c5fd]"
-                  : "border-white/[0.08] bg-white/[0.03] text-[#64748b] hover:border-white/15 hover:text-[#cbd5e1]"
+                  ? "border-[#2f80ff]/55 bg-[#2f80ff]/15 text-[#93c5fd]"
+                  : "border-white/[0.08] bg-white/[0.025] text-[#64748b] hover:border-white/15 hover:text-[#cbd5e1]"
               }`}
             >
               {item.label} <span className="font-mono">{count}</span>
@@ -1377,7 +1377,7 @@ function ExtractedFieldsPanel({
             <article
               key={field.key}
               data-field-key={field.key}
-              className={`rounded-[8px] border px-3 py-2.5 ${colors.border} ${colors.background}`}
+              className={`awb-extracted-field-card rounded-[8px] border px-3 py-2.5 ${colors.border} ${colors.background}`}
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${colors.dot}`} />
@@ -1396,7 +1396,7 @@ function ExtractedFieldsPanel({
                     disabled={readOnly}
                     rows={Math.min(6, Math.max(1, editingValue.split("\n").length))}
                     aria-label={field.label}
-                    className="mt-1 w-full resize-y overflow-hidden rounded-[6px] border border-white/[0.08] bg-black/15 px-2.5 py-2 text-[11px] font-semibold leading-[1.45] text-white outline-none placeholder:text-[#64748b] focus:border-[#2f80ff]/70 focus:bg-black/20 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="awb-extracted-field-input mt-1 w-full resize-y overflow-hidden rounded-[6px] border border-white/[0.08] bg-black/10 px-2 py-1.5 text-[13px] font-normal leading-5 text-white outline-none placeholder:text-[#64748b] focus:border-[#2f80ff]/70 focus:bg-black/15 disabled:cursor-not-allowed disabled:opacity-70"
                     placeholder="Missing value"
                   />
                   {isDirty && !readOnly ? (
@@ -1489,6 +1489,7 @@ function ReviewView({
   const processTime = extraction.meta.totalSeconds
     ? `${extraction.meta.totalSeconds.toFixed(1)}s`
     : `${(extraction.document.processingTimeMs / 1000).toFixed(1)}s`;
+  const isIssued = extraction.document.status === "issued";
 
   const updateFieldValue = (key: string, value: string) => {
     if (!canEdit) return;
@@ -1652,32 +1653,38 @@ function ReviewView({
 
   return (
     <div className="awb-review-page h-full overflow-y-auto overflow-x-hidden bg-[#050813] text-white">
-      <div className="awb-review-context flex min-h-[42px] items-center justify-between border-b border-white/[0.08] bg-[#070b17] px-5 py-2">
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold">
-            <span className="text-[#64748b]">Overview</span>
-            <span className="text-[#334155]">›</span>
-            <span>AWB Processing</span>
-          </div>
-          <div className="mt-1 text-[9px] text-[#64748b]">
-            {extraction.document.fileName} - Run {extraction.meta.runId || extraction.document.id.slice(0, 8)}
-          </div>
-        </div>
-        <span className="rounded-full border border-[#2f80ff]/25 bg-[#2f80ff]/10 px-2.5 py-1 font-mono text-[8px] font-bold uppercase text-[#60a5fa]">
-          {extraction.mode} mode
-        </span>
-      </div>
-
       <section className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 px-5 py-4">
-        <div className="awb-review-heading flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-[18px] font-extrabold tracking-[-0.03em]">AWB Processing</h1>
-            <p className="mt-0.5 text-[11px] text-[#64748b]">
-              Review extracted fields - {extraction.summary.capturedFields} of {extraction.summary.totalFields} captured - {extraction.summary.needsReview} need attention
-            </p>
-            <p className="mt-1 text-[10px] text-[#94a3b8]">
-              Red and amber fields should be reviewed before issuing.
-            </p>
+        {extraction.mode === "fallback" ? (
+          <div className="rounded-[8px] border border-amber-400/25 bg-amber-400/[0.08] px-4 py-3 text-[10px] font-medium text-amber-200">
+            {extraction.message ||
+              "Live extraction unavailable. Mock extraction was used."}
+          </div>
+        ) : null}
+        <div className="awb-review-heading flex flex-wrap items-center justify-between gap-3">
+          <div className="awb-review-summary flex min-h-[60px] min-w-[min(100%,640px)] flex-1 flex-wrap items-center gap-3 rounded-[9px] border border-[#00d4aa]/30 bg-[#00d4aa]/[0.07] px-4 py-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00d4aa]/20 text-[#00d4aa]">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <div className="text-[12px] font-extrabold">
+                Extraction completed in {processTime}
+              </div>
+            </div>
+            <div className="ml-auto grid min-w-[380px] grid-cols-4 gap-5 text-center font-mono max-md:ml-0 max-md:min-w-0 max-md:w-full max-sm:grid-cols-2">
+              {[
+                [`${extraction.summary.capturedFields} / ${extraction.summary.totalFields}`, "FIELDS"],
+                [String(extraction.summary.needsReview), "REVIEW"],
+                [`${extraction.summary.averageConfidencePercent}%`, "CONFIDENCE"],
+                [processTime, "PROCESS TIME"],
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <div className={`text-[13px] font-extrabold ${label === "REVIEW" ? "text-[#f59e0b]" : "text-[#00d4aa]"}`}>
+                    {value}
+                  </div>
+                  <div className="mt-0.5 text-[8px] text-[#64748b]">{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="awb-review-actions flex flex-wrap items-center justify-end gap-2">
             <button
@@ -1699,10 +1706,10 @@ function ReviewView({
             <button
               type="button"
               onClick={() => void issueAwb()}
-              disabled={!canEdit || savingDraft || issuing}
+              disabled={!canEdit || savingDraft || issuing || isIssued}
               className="inline-flex h-9 items-center justify-center rounded-[7px] bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-4 text-[11px] font-bold text-white shadow-[0_8px_22px_rgba(47,128,255,0.22)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {issuing ? "Issuing..." : "Issue AWB"}
+              {issuing ? "Issuing..." : isIssued ? "Issued" : "Issue AWB"}
             </button>
           </div>
         </div>
@@ -1729,33 +1736,42 @@ function ReviewView({
             <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#20c997] text-[10px]">✓</span>
             AI Extract
           </div>
-          <div className="mx-4 h-px flex-1 bg-[#2f80ff]" />
+          <div className={`mx-4 h-px flex-1 ${isIssued ? "bg-[#20c997]" : "bg-[#2f80ff]"}`} />
           <div className="flex items-center gap-2 text-white">
-            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#2f80ff] text-[9px] shadow-[0_0_0_4px_rgba(47,128,255,0.18)]">03</span>
+            <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-[9px] ${
+              isIssued
+                ? "bg-[#20c997] text-white"
+                : "bg-[#2f80ff] text-white shadow-[0_0_0_4px_rgba(47,128,255,0.18)]"
+            }`}>
+              {isIssued ? <CheckCircle2 className="h-3 w-3" /> : "03"}
+            </span>
             Review Fields
           </div>
-          <div className="mx-4 h-px flex-1 bg-white/[0.08]" />
-          <div className="flex items-center gap-2 text-[#64748b]">
-            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/10 text-[9px]">04</span>
+          <div className={`mx-4 h-px flex-1 ${isIssued ? "bg-[#20c997]" : "bg-white/[0.08]"}`} />
+          <div className={`flex items-center gap-2 ${isIssued ? "awb-step-issued text-white" : "text-[#64748b]"}`}>
+            <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-[9px] ${
+              isIssued
+                ? "bg-[#20c997] text-white shadow-[0_0_0_4px_rgba(32,201,151,0.18)]"
+                : "border border-white/10 text-[#64748b]"
+            }`}>
+              {isIssued ? <CheckCircle2 className="h-3 w-3" /> : "04"}
+            </span>
             Issue / Export
           </div>
         </div>
 
-        <div className="awb-review-summary flex min-h-[68px] flex-wrap items-center gap-3 rounded-[9px] border border-[#00d4aa]/30 bg-[#00d4aa]/[0.07] px-4 py-3">
+        <div className="hidden">
           <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#00d4aa]/20 text-[#00d4aa]">✓</div>
           <div>
             <div className="text-[12px] font-extrabold">
-              Extraction Complete - {extraction.summary.capturedFields} fields captured in {processTime}
-            </div>
-            <div className="mt-0.5 text-[9px] text-[#64748b]">
-              {extraction.summary.needsReview} fields flagged below - Verify red and amber entries before issuing
+              Extraction completed in {processTime}
             </div>
           </div>
           <div className="ml-auto grid min-w-[390px] grid-cols-4 gap-5 text-center font-mono max-md:ml-0 max-md:min-w-0 max-md:w-full max-sm:grid-cols-2">
             {[
               [`${extraction.summary.capturedFields} / ${extraction.summary.totalFields}`, "FIELDS"],
-              [`${extraction.summary.averageConfidencePercent}%`, "AVG CONFIDENCE"],
               [String(extraction.summary.needsReview), "REVIEW"],
+              [`${extraction.summary.averageConfidencePercent}%`, "CONFIDENCE"],
               [processTime, "PROCESS TIME"],
             ].map(([value, label]) => (
               <div key={label}>
@@ -1768,14 +1784,11 @@ function ReviewView({
           </div>
         </div>
 
-        <div className="awb-review-workspace grid min-w-0 grid-cols-1 items-start gap-4 min-[1280px]:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
+        <div className="awb-review-workspace grid min-w-0 grid-cols-1 items-start gap-4 min-[1024px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-[1280px]:grid-cols-2">
           <div className="awb-review-left-column flex h-[clamp(720px,calc(100vh-210px),1050px)] min-h-0 min-w-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.02]">
             <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-3 py-2">
               <div>
                 <div className="text-[12px] font-extrabold text-white">Review Workspace</div>
-                <div className="mt-0.5 text-[9px] text-[#64748b]">
-                  Compare the generated AWB with the source document
-                </div>
               </div>
               <div
                 role="tablist"
@@ -1846,7 +1859,7 @@ function ReviewView({
             </div>
           </div>
 
-          <div className="awb-review-source-column h-[clamp(720px,calc(100vh-210px),1050px)] min-h-0 min-w-0 min-[1280px]:sticky min-[1280px]:top-4">
+          <div className="awb-review-source-column h-[clamp(720px,calc(100vh-210px),1050px)] min-h-0 min-w-0">
             <UploadedPdfPanel fileName={fileName} pdfUrl={pdfUrl} sourceStored={sourceStored} />
           </div>
         </div>
@@ -1857,26 +1870,26 @@ function ReviewView({
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-awb-review-title"
-            className="w-full max-w-[430px] rounded-[10px] border border-white/10 bg-[#0b111e] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+            className="awb-confirm-issue-modal w-full max-w-[430px] rounded-[10px] border border-white/10 bg-[#0b111e] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
           >
-            <h2 id="confirm-awb-review-title" className="text-[16px] font-extrabold text-white">
+            <h2 id="confirm-awb-review-title" className="awb-confirm-issue-title text-[16px] font-extrabold text-white">
               Confirm AWB Review
             </h2>
-            <p className="mt-2 text-[12px] leading-5 text-[#94a3b8]">
-              Please confirm that you have reviewed all extracted fields and corrected any required values before issuing this AWB.
+            <p className="awb-confirm-issue-body mt-2 text-[12px] leading-5 text-[#94a3b8]">
+              Confirm that all required fields have been reviewed before issuing this AWB.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmIssueOpen(false)}
-                className="h-9 rounded-[7px] border border-white/10 bg-white/[0.04] px-4 text-[11px] font-semibold text-[#cbd5e1] hover:bg-white/[0.08]"
+                className="awb-confirm-issue-cancel h-9 rounded-[7px] border border-white/10 bg-white/[0.04] px-4 text-[11px] font-semibold text-[#cbd5e1] hover:bg-white/[0.08]"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => void confirmIssue()}
-                className="h-9 rounded-[7px] bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-4 text-[11px] font-bold text-white"
+                className="awb-confirm-issue-primary h-9 rounded-[7px] bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-4 text-[11px] font-bold text-white"
               >
                 Yes, Issue AWB
               </button>
@@ -1886,90 +1899,258 @@ function ReviewView({
       ) : null}
       <style jsx global>{`
         .dashboard-theme-light .awb-review-page {
-          background-color: #f3f4f6 !important;
+          background-color: #f4f7fb !important;
+          color: #111827 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-summary {
+          background-color: #f0fdf8 !important;
+          border-color: rgba(16, 185, 129, 0.3) !important;
+          color: #111827 !important;
+          box-shadow: none !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper,
+        .dashboard-theme-light .awb-review-page .awb-review-left-column,
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel {
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+          color: #111827 !important;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper > div {
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper > div:last-child {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper span {
+          color: #334155 !important;
+          border-color: #cbd5e1 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper span[class*="bg-[#20c997]"],
+        .dashboard-theme-light .awb-review-page .awb-review-stepper span[class*="bg-[#2f80ff]"] {
+          color: #ffffff !important;
+          border-color: transparent !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-stepper > div.awb-step-issued {
+          color: #047857 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-modal {
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+          color: #111827 !important;
+          box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18) !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-title {
+          color: #111827 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-body {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-cancel {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-cancel:hover {
+          background-color: #f8fafc !important;
+          border-color: #94a3b8 !important;
           color: #0f172a !important;
         }
 
-        .dashboard-theme-light .awb-review-page .awb-review-context {
-          background-color: #f8fafc !important;
-          border-color: #cbd5e1 !important;
-          color: #0f172a !important;
+        .dashboard-theme-light .awb-review-page .awb-confirm-issue-primary {
+          color: #ffffff !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-review-actions button:not(:last-child) {
           background-color: #ffffff !important;
           border-color: #cbd5e1 !important;
-          color: #475569 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-actions button:not(:last-child):hover {
+          background-color: #f8fafc !important;
+          border-color: #93b8ee !important;
+          color: #0f172a !important;
         }
 
         .dashboard-theme-light .awb-review-page h1,
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar span,
-        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child,
-        .dashboard-theme-light .awb-review-page section > div:nth-child(3) {
-          color: #0f172a !important;
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child {
+          color: #111827 !important;
         }
 
         .dashboard-theme-light .awb-review-page p,
-        .dashboard-theme-light .awb-review-page .awb-review-context [class*="text-[#64748b]"],
         .dashboard-theme-light .awb-review-page section [class*="text-[#64748b]"] {
           color: #475569 !important;
         }
 
-        .dashboard-theme-light .awb-review-page section > div:nth-child(2) {
-          background-color: #f8fafc !important;
-          border-color: #cbd5e1 !important;
-          color: #0f172a !important;
-        }
-
         .dashboard-theme-light .awb-review-page .awb-document-preview,
-        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel {
-          background-color: #0a0e1a !important;
-          border-color: rgba(255, 255, 255, 0.08) !important;
-          color: #ffffff !important;
+        .dashboard-theme-light .awb-review-page .awb-extracted-fields-panel {
+          background-color: transparent !important;
+          border-color: transparent !important;
+          color: #111827 !important;
+          box-shadow: none !important;
         }
 
+        .dashboard-theme-light .awb-review-page .awb-review-left-column > div:first-child,
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar,
+        .dashboard-theme-light .awb-review-page .awb-preview-review-summary,
+        .dashboard-theme-light .awb-review-page .awb-preview-actions,
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child {
-          background-color: #111726 !important;
-          border-color: rgba(255, 255, 255, 0.08) !important;
-          color: #ffffff !important;
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+          color: #111827 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-review-left-column [role="tablist"] {
+          background-color: #f8fafc !important;
+          border-color: #d5deea !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-extracted {
+          background-color: #dffaf0 !important;
+          border-color: #5ee6bb !important;
+          color: #047857 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-extracted strong {
+          color: #065f46 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-extracted span {
+          background-color: #10b981 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-review {
+          background-color: #fff3d6 !important;
+          border-color: #f4c75f !important;
+          color: #92400e !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-review strong {
+          color: #78350f !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-review span {
+          background-color: #f59e0b !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-empty {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #475569 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-empty strong {
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-empty span {
+          background-color: #64748b !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-confidence {
+          background-color: #e8f1ff !important;
+          border-color: #93b8ee !important;
+          color: #1d4ed8 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-confidence strong {
+          color: #1e3a8a !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar span:first-of-type,
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child > div {
-          color: #ffffff !important;
+          color: #111827 !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar span:not(:first-of-type),
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child > span {
-          color: #94a3b8 !important;
+          color: #64748b !important;
         }
 
-        .dashboard-theme-light .awb-review-page .awb-preview-toolbar button {
-          background-color: rgba(255, 255, 255, 0.04) !important;
-          border-color: rgba(255, 255, 255, 0.1) !important;
-          color: #94a3b8 !important;
-        }
-
-        .dashboard-theme-light .awb-review-page section > div:nth-child(2) [class*="text-white"] {
-          color: #0f172a !important;
-        }
-
-        .dashboard-theme-light .awb-review-page section > div:nth-child(3) {
-          background-color: #dff8f4 !important;
-          border-color: rgba(20, 184, 166, 0.35) !important;
-        }
-
-        .dashboard-theme-light .awb-review-page .awb-document-scroll {
-          background-color: #1b2232 !important;
+        .dashboard-theme-light .awb-review-page .awb-document-scroll,
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:last-child {
+          background-color: #f8fafc !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-document-scroll .awb-form {
+          color: #111827 !important;
+        }
+
+        .awb-review-page .awb-extracted-fields-panel .awb-extracted-field-input {
+          font-size: 13px !important;
+          font-weight: 400 !important;
+          line-height: 20px !important;
+          padding: 5px 8px !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-extracted-fields-panel > div,
+        .dashboard-theme-light .awb-review-page .awb-document-preview > div {
+          border-color: #d5deea !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-extracted-fields-panel h3,
+        .dashboard-theme-light .awb-review-page .awb-extracted-fields-panel [class*="text-[#cbd5e1]"] {
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-extracted-field-card {
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+          box-shadow: none !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-extracted-field-input {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #111827 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-extracted-field-input:focus {
+          background-color: #ffffff !important;
+          border-color: rgba(47, 128, 255, 0.7) !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-toolbar button,
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel button,
+        .dashboard-theme-light .awb-review-page [role="tab"] {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-toolbar button:hover,
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel button:hover,
+        .dashboard-theme-light .awb-review-page [role="tab"]:hover {
+          background-color: #edf4ff !important;
+          border-color: #93b8ee !important;
           color: #0f172a !important;
         }
 
-        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:last-child {
-          background-color: #171d2d !important;
+        .dashboard-theme-light .awb-review-page [role="tab"][aria-selected="true"] {
+          background-color: #2f80ff !important;
+          border-color: #2f80ff !important;
+          color: #ffffff !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-toolbar button[class*="bg-[#2f80ff]"],
+        .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel button[aria-pressed="true"] {
+          background-color: #e6f0ff !important;
+          border-color: rgba(47, 128, 255, 0.45) !important;
+          color: #2f80ff !important;
         }
 
         @media (max-width: 1279px) {
@@ -1981,12 +2162,6 @@ function ReviewView({
         }
 
         @media (max-width: 767px) {
-          .awb-review-page .awb-review-context {
-            align-items: flex-start;
-            gap: 10px;
-            flex-direction: column;
-          }
-
           .awb-review-summary > div:nth-child(2) {
             min-width: 0;
             flex: 1;
@@ -2343,18 +2518,12 @@ function AwbProcessingPageContent() {
             </div>
 
             <div className="mt-1 max-w-[340px] text-center text-[13px] text-[#94a3b8]">
-              Drag & drop your PDF, or click to browse. AI will extract
-              all 20 standard AWB fields automatically.
+              Drag & drop your PDF, or click to browse
             </div>
           </div>
 
-          {/* OR */}
-          <div className="flex items-center gap-2 text-[11px] text-[#64748b] before:h-px before:w-[30px] before:bg-white/10 after:h-px after:w-[30px] after:bg-white/10">
-            OR
-          </div>
-
           {/* BUTTON */}
-          <button onClick={(event) => { event.stopPropagation(); openFilePicker(); }} className="rounded-lg bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] px-[22px] py-[9px] text-xs font-semibold text-white">
+          <button onClick={(event) => { event.stopPropagation(); openFilePicker(); }} className="primary-blue-action rounded-full bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-6 py-2.5 text-[12px] font-semibold text-white shadow-[0_8px_20px_rgba(47,128,255,0.24)] transition hover:brightness-110 hover:shadow-md">
             Browse Files
           </button>
 
@@ -2421,7 +2590,7 @@ function AwbProcessingPageContent() {
 
           {/* SUBTITLE */}
           <div className="awb-ready-subtitle mb-[18px] text-[11px] leading-[1.6] text-[#64748b]">
-            Once you upload an AWB, our AI will automatically detect and extract:
+            Standard AWB fields
           </div>
 
           {/* FIELD GRID */}
@@ -2501,6 +2670,10 @@ function AwbProcessingPageContent() {
 
   .dashboard-theme-light .awb-upload-page .awb-upload-card [class*="text-white"] {
     color: #0f172a !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-upload-card .primary-blue-action {
+    color: #ffffff !important;
   }
 
   .dashboard-theme-light .awb-upload-page .awb-upload-card [class*="text-[#94a3b8]"],

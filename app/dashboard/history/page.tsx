@@ -1305,20 +1305,20 @@ export default function HistoryPage() {
           color: var(--history-text);
         }
         .dashboard-theme-light .history-page {
-          --history-bg: #f1f5f9;
+          --history-bg: #f4f7fb;
           --history-card: #ffffff;
-          --history-card-border: rgba(0, 0, 0, 0.08);
-          --history-card-hover: #f8fafc;
+          --history-card-border: #d5deea;
+          --history-card-hover: #edf4ff;
           --history-text: #0f172a;
           --history-text2: #1e293b;
-          --history-muted: #64748b;
-          --history-faint: #e2e8f0;
+          --history-muted: #52647a;
+          --history-faint: #718096;
           --history-input: #ffffff;
-          --history-input-border: rgba(0, 0, 0, 0.1);
-          --history-row-hover: rgba(59, 130, 246, 0.03);
-          --history-row-selected: rgba(59, 130, 246, 0.06);
+          --history-input-border: #b9c6d8;
+          --history-row-hover: #edf4ff;
+          --history-row-selected: #e6f0ff;
           --history-table-head: #f8fafc;
-          --history-divider: rgba(0, 0, 0, 0.07);
+          --history-divider: #d5deea;
         }
         .history-main {
           scrollbar-width: thin;
@@ -1542,7 +1542,7 @@ export default function HistoryPage() {
         }
         .dashboard-theme-light .history-calendar-clear {
           border-color: rgba(15, 23, 42, 0.12);
-          color: #64748b;
+          color: #52647a;
         }
         .history-calendar-clear:hover {
           border-color: rgba(59, 130, 246, 0.35);

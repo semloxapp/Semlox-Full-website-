@@ -538,23 +538,34 @@ Rules:
 
 ## 15. AWB Extraction Flow
 
-The first AWB Processing implementation supports:
+The AWB Processing extraction path supports:
 
 ```text
-upload -> mock extraction -> normalized fields -> review
+upload -> server-side mock/live/fallback extraction -> normalized fields -> review
 ```
 
 Configuration:
 
 ```env
 AWB_EXTRACTION_MODE=mock
+AWB_EXTRACTION_API_URL=
+AWB_EXTRACTION_TIMEOUT_MS=180000
+AWB_EXTRACTION_API_KEY=
 ```
+
+Live AWB extraction is proxied server-side through `POST /api/awb/extract`; the
+browser never calls the Flask provider directly. Configure deployment
+environment variables with `AWB_EXTRACTION_MODE=live`,
+`AWB_EXTRACTION_API_URL`, and optionally `AWB_EXTRACTION_TIMEOUT_MS` (default
+180000) and `AWB_EXTRACTION_API_KEY`. Use `fallback` to try live extraction
+first and clearly return mock data with `mode = "fallback"` when the provider
+is unavailable. Provider URLs and keys must never use a `NEXT_PUBLIC_` prefix.
 
 Supported mode names are `mock`, `live`, and `fallback`. Current behavior:
 
 * `mock` uses the local fixture and never calls a live AI provider
-* `fallback` currently uses the same local fixture until a live provider is configured
-* `live` returns a structured not-configured error and consumes no API credits
+* `live` calls the configured Flask provider server-side and fails with a safe structured error when unavailable
+* `fallback` tries the live provider first, then returns the local fixture with `mode = "fallback"` and an explicit fallback message
 
 The frontend sends the selected PDF/image to `POST /api/awb/extract` with `credentials: "include"`. The route authenticates through the existing cookie/Bearer helper, validates PDF/JPG/PNG/TIFF files up to 25 MB, and returns the stable SemLoX AWB extraction schema.
 

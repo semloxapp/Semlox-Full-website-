@@ -4,6 +4,7 @@ import type {
   AwbFieldStatus,
   NormalizeAwbExtractionOptions,
 } from "./types";
+import { awbSummaryFromFields } from "./fieldStats";
 
 const AWB_ENTITY_TYPE_MAP: Record<string, { key: string; label: string }> = {
   Airport_of_Departure: { key: "origin_airport", label: "Origin Airport" },
@@ -134,22 +135,35 @@ export function normalizeAwbExtractionResponse(
     }
   }
 
-  const fields = [...fieldsByKey.values()];
-  if (!fields.length) {
-    throw new Error("Mock extraction response contains no supported AWB fields.");
+  if (!fieldsByKey.size) {
+    throw new Error("Extraction response contains no supported AWB fields.");
   }
 
-  const capturedFields = fields.filter((field) => field.value.length > 0).length;
-  const confidenceTotal = fields.reduce((total, field) => total + field.confidence, 0);
-  const averageConfidence = fields.length ? confidenceTotal / fields.length : 0;
-  const validFields = fields.filter((field) => field.status === "valid").length;
-  const warningFields = fields.filter((field) => field.status === "warning").length;
-  const missingFields = fields.filter((field) => field.status === "missing").length;
-  const needsReview = fields.filter((field) => field.status !== "valid").length;
+  for (const mapping of Object.values(AWB_ENTITY_TYPE_MAP)) {
+    if (fieldsByKey.has(mapping.key)) continue;
+    fieldsByKey.set(mapping.key, {
+      ...mapping,
+      value: "",
+      confidence: 0,
+      confidencePercent: 0,
+      needsReview: true,
+      status: "missing",
+      color: "red",
+    });
+  }
+
+  const fields = [...fieldsByKey.values()];
+
+  const summary = awbSummaryFromFields(fields);
   const meta = asRecord(data?.meta);
   const timing = asRecord(meta?.timing);
   const totalSeconds = Number(timing?.total_seconds);
-  const runId = typeof meta?.run_id === "string" ? meta.run_id : undefined;
+  const runId =
+    typeof meta?.run_id === "string"
+      ? meta.run_id
+      : typeof root.run_id === "string"
+        ? root.run_id
+        : undefined;
   const stages = asRecord(meta?.stages);
   const errors = Array.isArray(meta?.errors)
     ? meta.errors.filter((error): error is string => typeof error === "string")
@@ -167,20 +181,11 @@ export function normalizeAwbExtractionResponse(
       fileName: options.fileName,
       fileType: options.fileType,
       pages: options.pages || 1,
-      status: needsReview > 0 ? "review_required" : "ready_to_issue",
+      status: summary.needsReview > 0 ? "review_required" : "ready_to_issue",
       processingTimeMs: Number.isFinite(totalSeconds) ? Math.round(totalSeconds * 1000) : 0,
       runId,
     },
-    summary: {
-      totalFields: fields.length,
-      capturedFields,
-      averageConfidence,
-      averageConfidencePercent: Math.round(averageConfidence * 100),
-      needsReview,
-      validFields,
-      warningFields,
-      missingFields,
-    },
+    summary,
     fields,
     meta: {
       runId,

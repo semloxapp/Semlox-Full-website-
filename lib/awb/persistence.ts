@@ -11,6 +11,7 @@ import type {
   AwbExtractionResponse,
   AwbFieldStatus,
 } from "./types";
+import { awbSummaryFromFields } from "./fieldStats";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -154,7 +155,8 @@ export async function authenticateAwbRequest(
 export async function createPersistedAwbExtraction(
   context: AwbAccessContext,
   extraction: AwbExtractionResponse,
-  file: File
+  file: File,
+  rawResponse: unknown = null
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const documentResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?select=*`, {
@@ -173,7 +175,7 @@ export async function createPersistedAwbExtraction(
       pages: extraction.document.pages,
       processing_time_ms: extraction.document.processingTimeMs,
       summary: extraction.summary,
-      raw_response: null,
+      raw_response: rawResponse,
     }),
   });
   const documentRows = await documentResponse.json().catch(() => []);
@@ -209,6 +211,40 @@ export async function createPersistedAwbExtraction(
   }
 
   return document;
+}
+
+export async function createPersistedAwbFailure(
+  context: AwbAccessContext,
+  file: File,
+  mode: AwbExtractionMode
+) {
+  if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
+  const response = await fetch(`${supabaseUrl}/rest/v1/awb_documents?select=id`, {
+    method: "POST",
+    headers: serviceHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify({
+      company_id: context.companyId,
+      uploaded_by: context.userId,
+      file_name: file.name,
+      file_type: file.type || "application/octet-stream",
+      file_size: file.size,
+      storage_path: null,
+      status: "failed",
+      extraction_mode: mode,
+      run_id: null,
+      pages: 1,
+      processing_time_ms: null,
+      summary: {},
+      raw_response: null,
+    }),
+  });
+  const rows = await response.json().catch(() => []);
+  const documentId =
+    Array.isArray(rows) && typeof rows[0]?.id === "string" ? rows[0].id : null;
+  if (!response.ok || !documentId) {
+    throw new Error("Failed to create failed AWB document");
+  }
+  return documentId;
 }
 
 export async function getAwbDocumentForUser(request: Request, documentId: string) {
@@ -406,20 +442,7 @@ function fieldFromRow(row: FieldRow): AwbExtractedField {
 }
 
 export function summarizeAwbFields(fields: AwbExtractedField[]): AwbExtractionResponse["summary"] {
-  const capturedFields = fields.filter((field) => field.value.trim()).length;
-  const averageConfidence = fields.length
-    ? fields.reduce((total, field) => total + field.confidence, 0) / fields.length
-    : 0;
-  return {
-    totalFields: fields.length,
-    capturedFields,
-    averageConfidence,
-    averageConfidencePercent: Math.round(averageConfidence * 100),
-    needsReview: fields.filter((field) => field.status !== "valid").length,
-    validFields: fields.filter((field) => field.status === "valid").length,
-    warningFields: fields.filter((field) => field.status === "warning").length,
-    missingFields: fields.filter((field) => field.status === "missing").length,
-  };
+  return awbSummaryFromFields(fields);
 }
 
 export function toAwbExtractionResponse(
@@ -580,12 +603,18 @@ export function validateAwbForIssue(fields: AwbExtractedField[]) {
   return { invalidFields, warningFields };
 }
 
-export async function setAwbDocumentIssued(documentId: string) {
+export async function setAwbDocumentIssued(
+  documentId: string,
+  summary?: AwbExtractionResponse["summary"]
+) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const response = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
     method: "PATCH",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
-    body: JSON.stringify({ status: "issued" }),
+    body: JSON.stringify({
+      status: "issued",
+      ...(summary ? { summary } : {}),
+    }),
   });
   if (!response.ok) throw new Error("Failed to issue AWB");
 }

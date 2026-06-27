@@ -2032,8 +2032,7 @@ function SettingsPageContent() {
         <UserSettingsView
           companyId={currentMembership?.company_id || selectedCompanyId}
           role={currentMembership?.role}
-          activeSection={safeUserSection}
-          onSectionChange={(section) => changeSection(section)}
+          initialSection={safeUserSection}
         />
       ) : (
         <>
@@ -2067,7 +2066,7 @@ function SettingsPageContent() {
       )}
       <style jsx global>{`
         .dashboard-theme-light .settings-page {
-          background-color: #eef1f6 !important;
+          background-color: #f4f7fb !important;
           background-image: linear-gradient(rgba(47, 128, 255, 0.045) 1px, transparent 1px),
             linear-gradient(90deg, rgba(47, 128, 255, 0.045) 1px, transparent 1px) !important;
           color: #111827 !important;
@@ -2075,12 +2074,12 @@ function SettingsPageContent() {
 
         .dashboard-theme-light .settings-page aside:not(:first-child),
         .dashboard-theme-light .settings-page aside.w-\\[210px\\] {
-          background-color: #f6f8fc !important;
-          border-color: #d9e0ea !important;
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
         }
 
         .dashboard-theme-light .settings-page aside.w-\\[210px\\] {
-          box-shadow: inset -1px 0 0 #d9e0ea;
+          box-shadow: inset -1px 0 0 #d5deea;
         }
 
         .dashboard-theme-light .settings-page aside.w-\\[210px\\] button {
@@ -2116,7 +2115,7 @@ function SettingsPageContent() {
         .dashboard-theme-light .settings-page [class*="text-[#64748B]"],
         .dashboard-theme-light .settings-page [class*="text-slate-500"],
         .dashboard-theme-light .settings-page [class*="text-slate-400"] {
-          color: #64748b !important;
+          color: #52647a !important;
         }
 
         .dashboard-theme-light .settings-page [class*="bg-white/[0.025]"],
@@ -2126,25 +2125,25 @@ function SettingsPageContent() {
         .dashboard-theme-light .settings-page [class*="bg-[#151925]"],
         .dashboard-theme-light .settings-page [class*="bg-[#0b101c]"],
         .dashboard-theme-light .settings-page [class*="bg-[#0d1323]"] {
-          background-color: #f8fafc !important;
+          background-color: #ffffff !important;
         }
 
         .dashboard-theme-light .settings-page [class*="border-white/"],
         .dashboard-theme-light .settings-page [class*="border-white["] {
-          border-color: #d9e0ea !important;
+          border-color: #d5deea !important;
         }
 
         .dashboard-theme-light .settings-page input,
         .dashboard-theme-light .settings-page textarea,
         .dashboard-theme-light .settings-page select {
-          background-color: #f8fafc !important;
-          border-color: #cbd5e1 !important;
-          color: #111827 !important;
+          background-color: #ffffff !important;
+          border-color: #b9c6d8 !important;
+          color: #0f172a !important;
         }
 
         .dashboard-theme-light .settings-page input::placeholder,
         .dashboard-theme-light .settings-page textarea::placeholder {
-          color: #94a3b8 !important;
+          color: #718096 !important;
         }
 
         .dashboard-theme-light .settings-page button:not([class*="bg-[#2F80FF]"]):not([class*="from-[#2F80FF]"]):not([class*="bg-gradient"]) {
@@ -2154,6 +2153,113 @@ function SettingsPageContent() {
         .dashboard-theme-light .settings-page button:hover:not([class*="bg-[#2F80FF]"]):not([class*="from-[#2F80FF]"]):not([class*="bg-gradient"]) {
           color: #111827 !important;
           background-color: #eef4ff !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-inactive {
+          background-color: transparent !important;
+          border-color: transparent !important;
+          color: #475569 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-inactive svg {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-inactive:hover {
+          background-color: #eef4ff !important;
+          color: #1d4ed8 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-inactive:hover svg {
+          color: #2563eb !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-active {
+          background-color: #eff6ff !important;
+          border-color: #bfdbfe !important;
+          color: #1d4ed8 !important;
+          box-shadow: inset 3px 0 0 #2f80ff, 0 8px 18px rgba(37, 99, 235, 0.08) !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-nav-item-active svg {
+          color: #2563eb !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-theme-option-inactive {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-theme-option-inactive svg {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-theme-option-inactive:hover {
+          background-color: #eef4ff !important;
+          border-color: #93c5fd !important;
+          color: #1d4ed8 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-theme-option-active {
+          background-color: #eff6ff !important;
+          border-color: #60a5fa !important;
+          color: #1d4ed8 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-theme-option-active svg {
+          color: #2563eb !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive {
+          background-color: transparent !important;
+          border-color: transparent !important;
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive svg {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive:hover {
+          background-color: rgba(255, 255, 255, 0.03) !important;
+          color: #94a3b8 !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-user-nav-item-active {
+          background-color: #0d1b35 !important;
+          border-color: #1b3b73 !important;
+          color: #ffffff !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-user-nav-item-active svg {
+          color: #2f80ff !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-theme-option-inactive {
+          background-color: rgba(255, 255, 255, 0.025) !important;
+          border-color: rgba(255, 255, 255, 0.1) !important;
+          color: #94a3b8 !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-theme-option-inactive svg {
+          color: #64748b !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-theme-option-inactive:hover {
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          border-color: rgba(47, 128, 255, 0.5) !important;
+          color: #cbd5e1 !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-theme-option-active {
+          background-color: #0d1b35 !important;
+          border-color: #2f80ff !important;
+          color: #ffffff !important;
+        }
+
+        .dashboard-theme-dark .settings-page .settings-theme-option-active svg {
+          color: #60a5fa !important;
         }
       `}</style>
     </div>

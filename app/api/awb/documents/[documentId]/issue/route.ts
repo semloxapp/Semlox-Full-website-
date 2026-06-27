@@ -81,9 +81,14 @@ export async function POST(
       );
     }
 
-    await setAwbDocumentIssued(documentId);
+    const issuedExtraction = toAwbExtractionResponse(
+      { ...access.document, status: "issued" },
+      fieldRows
+    );
+    await setAwbDocumentIssued(documentId, issuedExtraction.summary);
     const awbNumber =
-      extraction.fields.find((field) => field.key === "awb_number")?.value || null;
+      issuedExtraction.fields.find((field) => field.key === "awb_number")?.value ||
+      null;
     await createAwbEvent({
       documentId,
       companyId: access.document.company_id,
@@ -96,8 +101,10 @@ export async function POST(
       ok: true,
       message: "AWB issued successfully.",
       data: {
-        documentId,
-        status: "issued",
+        ...issuedExtraction,
+        finalizedFieldKeys: issuedExtraction.fields
+          .filter((field) => field.value.trim())
+          .map((field) => field.key),
         warnings: validation.warningFields,
       },
     });
