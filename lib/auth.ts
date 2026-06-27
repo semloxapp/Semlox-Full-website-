@@ -7,6 +7,19 @@ type SupabaseUser = {
   user_metadata?: Record<string, any>;
 };
 
+function decodeSessionCookie(cookieValue: string) {
+  try {
+    return JSON.parse(Buffer.from(cookieValue, "base64url").toString("utf8"));
+  } catch {
+    const normalized = cookieValue.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = typeof globalThis.atob === "function"
+      ? globalThis.atob(padded)
+      : Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(decoded);
+  }
+}
+
 export async function getUserFromAccessToken(accessToken: string | null): Promise<SupabaseUser | null> {
   if (!accessToken || !supabaseUrl) return null;
 
@@ -75,8 +88,7 @@ export function extractBearerTokenFromRequest(request: Request) {
   if (!match) return null;
   const cookieVal = match.split("=")[1] || "";
   try {
-    const decoded = typeof globalThis.atob === "function" ? globalThis.atob(cookieVal) : Buffer.from(cookieVal, "base64").toString("utf8");
-    const payload = JSON.parse(decoded);
+    const payload = decodeSessionCookie(cookieVal);
     // Check expiry
     const expiresAt = Number(payload?.expires_at) || 0;
     if (Date.now() > expiresAt) return null;

@@ -1,86 +1,178 @@
-You are working on a production Next.js + Supabase SaaS application called SemloX AI Document Engine.
+# STRICT FIX — PRODUCTION LOGIN SESSION_COOKIE_ERROR
+
+We deployed SemloX to Vercel.
+
+Current issue:
+- Public companies load correctly, so Supabase connectivity is working.
+- Same login credentials work locally.
+- In production, POST /api/auth/login returns 500.
+- Response body is:
+
+{
+  "ok": false,
+  "code": "SESSION_COOKIE_ERROR",
+  "message": "Could not start your session. Please try again."
+}
+
+This means login likely reaches Supabase, but fails while creating or setting the `semlox_session` cookie.
 
 CRITICAL RULES:
-- DO NOT modify backend code
-- DO NOT modify API routes
-- DO NOT modify authentication logic
-- DO NOT change Supabase queries
-- ONLY modify frontend UI (React + Tailwind)
+- Do NOT rewrite the auth system.
+- Do NOT change database schema.
+- Do NOT change Supabase tables.
+- Do NOT change frontend UI.
+- Do NOT remove cookie-based auth.
+- Only fix `/api/auth/login` cookie/session creation safely.
+- Keep local login working.
 
----
+Current auth design:
+- Primary session cookie name: `semlox_session`
+- Cookie must be httpOnly
+- Cookie must be secure in production
+- Cookie must use sameSite lax
+- Cookie must use path "/"
+- Middleware validates this cookie
+- Frontend relies on this cookie after login
 
-# TASK (VERY IMPORTANT)
+Files to inspect:
+- `app/api/auth/login/route.ts`
+- `lib/auth.ts`
+- `middleware.ts`
 
-Remove the following UI section from the AWB Processing page:
+Main task:
+Find exactly why `/api/auth/login` throws `SESSION_COOKIE_ERROR` in production.
 
-## REMOVE COMPLETELY:
-- The breadcrumb/header line:
-  "Overview > AWB Processing"
-- The file/run metadata line below it:
-  "3.PDF - Run mock-run-xxxx"
-- Any mock/run identifier text
-- Any breadcrumb navigation at top of AWB page
+Check these possible causes:
 
----
+1. Cookie value too large
+If the route stores the full Supabase session/user object in `semlox_session`, fix it.
+Do NOT store full session object.
+Do NOT store full user object.
+Only store minimal data needed by middleware/helper:
 
-# STRICT UI RULES
+{
+  access_token,
+  refresh_token,
+  expires_at
+}
 
-## 1. AWB PAGE HEADER CLEANUP
-Only keep:
-- "AWB Processing" title
-- main action buttons (New Document, Save Draft, Issue AWB)
-- workflow stepper
+Optionally include:
+{
+  user_id,
+  email
+}
 
-Everything else above the stepper must be removed.
+But avoid full metadata.
 
----
+Cookie should stay under browser cookie size limits.
 
-## 2. DO NOT TOUCH:
-- backend logic
-- API calls
-- authentication
-- Supabase integration
-- database logic
-- state management logic
+2. Wrong cookie setting method
+If the route uses `Response.json()` and then tries to set cookies incorrectly, fix it to use `NextResponse`.
 
----
+Correct pattern:
 
-## 3. UI SAFETY RULES
-- Do not break layout structure
-- Do not remove functional components
-- Only remove static / redundant UI text elements
-- Do not affect PDF viewer
-- Do not affect extracted fields logic
+```ts
+import { NextResponse } from "next/server";
 
----
+const response = NextResponse.json({
+  ok: true,
+  user: {
+    id: user.id,
+    email: user.email
+  }
+});
 
-## 4. DESIGN CONSISTENCY RULES
-- Maintain existing SemloX dark/light theme system
-- Ensure no layout shift after removing header
-- Keep spacing consistent after removal
-- Ensure no empty gap remains where header was
+response.cookies.set("semlox_session", encodedSession, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: maxAgeSeconds
+});
 
----
+return response;
 
-## 5. FILE SCOPE
-Only modify:
-- app/dashboard/awb/page.tsx (or AWB page component file)
 
-Do NOT touch any other file.
 
----
 
-## 6. FINAL EXPECTED RESULT
+Do not use a pattern that works locally but fails on Vercel.
 
-After changes:
-- No breadcrumb ("Overview > AWB Processing")
-- No mock/run file text
-- Clean minimal AWB header
-- UI starts directly from:
-  "AWB Processing"
-  + buttons
-  + stepper
+3. Encoding issue
+   If encoding uses `btoa()` or browser-only APIs, replace with Node-safe encoding:
 
----
+```ts
+const encodedSession = Buffer.from(JSON.stringify(sessionPayload), "utf8").toString("base64url");
+```
 
-END
+And decoding should match:
+
+```ts
+JSON.parse(Buffer.from(cookieValue, "base64url").toString("utf8"));
+```
+
+4. Runtime issue
+   If the route is using Edge runtime and Node APIs like Buffer are not supported, either:
+
+* remove `runtime = "edge"` from `/api/auth/login`, or
+* use Web-compatible encoding safely.
+
+Preferred:
+Use Node.js runtime for auth login route if cookie/session encoding uses Buffer.
+
+5. Add safe logs temporarily
+   Add safe server logs around cookie creation.
+
+Allowed logs:
+
+* `[auth-login] request received`
+* `[auth-login] supabase sign-in success true/false`
+* `[auth-login] session exists true/false`
+* `[auth-login] cookie payload keys`
+* `[auth-login] encoded cookie length`
+* `[auth-login] setting cookie`
+* `[auth-login] cookie set success`
+* `[auth-login] cookie error message`
+
+Never log:
+
+* password
+* access token
+* refresh token
+* full session
+* cookie value
+* service role key
+* authorization header
+
+6. Improve error detail internally
+   Keep user-facing message safe, but log exact server error in Vercel logs.
+
+Return structured error:
+
+```json
+{
+  "ok": false,
+  "code": "SESSION_COOKIE_ERROR",
+  "message": "Could not start your session. Please try again."
+}
+```
+
+But server logs should show the real cause.
+
+7. Success criteria
+   After fix:
+
+* POST /api/auth/login returns 200
+* response body has `{ ok: true }`
+* response headers include `Set-Cookie: semlox_session=...`
+* Application → Cookies shows `semlox_session`
+* user redirects to dashboard
+* middleware accepts cookie
+* local login still works
+* production login works
+
+Do not change anything else.
+
+```
+
+Most likely fix: your login route is trying to store too much session data in the cookie or setting the cookie using a method that fails on Vercel. The model should inspect `/api/auth/login/route.ts` first.
+```

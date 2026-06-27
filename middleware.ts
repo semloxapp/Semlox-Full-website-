@@ -5,6 +5,15 @@ import { supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 const PROTECTED_PATHS = ["/dashboard", "/dashboard/", "/dashboard/", "/dashboard"];
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 2;
 
+function decodeSessionCookie(cookieValue: string) {
+  const normalized = cookieValue.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const decoded = typeof globalThis.atob === "function"
+    ? globalThis.atob(padded)
+    : Buffer.from(cookieValue, "base64url").toString("utf8");
+  return JSON.parse(decoded);
+}
+
 function isProtected(pathname: string) {
   // Match /dashboard and any subpaths, and other protected prefixes
   return (
@@ -32,8 +41,7 @@ export async function middleware(req: NextRequest) {
     const cookieVal = match.split("=")[1] || "";
     let payload = null;
     try {
-      const decoded = typeof globalThis.atob === "function" ? globalThis.atob(cookieVal) : Buffer.from(cookieVal, "base64").toString("utf8");
-      payload = JSON.parse(decoded);
+      payload = decodeSessionCookie(cookieVal);
     } catch (e) {
       const loginUrl = new URL("/login", req.url);
       return NextResponse.redirect(loginUrl);
