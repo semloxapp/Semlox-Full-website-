@@ -265,13 +265,13 @@ function SettingsSideNav({
                         onSectionChange(item.id);
                       }
                     }}
-                    className={`flex h-[34px] w-full items-center gap-2 rounded-[6px] px-3 text-left text-[11px] font-semibold ${
+                    className={`settings-admin-nav-item flex h-[34px] w-full items-center gap-2 rounded-[6px] px-3 text-left text-[11px] font-semibold ${
                       isActive
-                        ? "border border-[#1B3B73] bg-[#0D1B35] text-white"
-                        : "text-[#64748B] hover:bg-white/[0.03] hover:text-[#94A3B8]"
+                        ? "settings-admin-nav-item-active border"
+                        : "settings-admin-nav-item-inactive"
                     }`}
                   >
-                    <Icon className={`h-3.5 w-3.5 ${isActive ? "text-[#2F80FF]" : ""}`} />
+                    <Icon className="h-3.5 w-3.5" />
                     {item.label}
                   </button>
                 );
@@ -1003,9 +1003,9 @@ function TeamMembers() {
         </div>
       )}
       {announcementOpen && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-[#020617]/70 backdrop-blur-[5px]">
-          <div className="w-[430px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[12px] border border-white/[0.10] bg-[#090d18] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
-            <div className="flex items-start border-b border-white/[0.08] px-5 py-4">
+        <div className="settings-announcement-overlay fixed inset-0 z-[500] flex items-center justify-center bg-[#020617]/70 backdrop-blur-[5px]">
+          <div className="settings-announcement-modal w-[430px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[12px] border border-white/[0.10] bg-[#090d18] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+            <div className="settings-announcement-header flex items-start border-b border-white/[0.08] px-5 py-4">
               <div>
                 <h3 className="text-[14px] font-extrabold text-white">Send Workspace Announcement</h3>
                 <p className="mt-1 text-[9px] text-[#64748B]">
@@ -1016,7 +1016,7 @@ function TeamMembers() {
                 type="button"
                 onClick={() => setAnnouncementOpen(false)}
                 disabled={announcementLoading}
-                className="ml-auto flex h-6 w-6 items-center justify-center rounded-[6px] border border-white/[0.10] text-[#64748B] hover:text-white disabled:opacity-50"
+                className="settings-announcement-close ml-auto flex h-6 w-6 items-center justify-center rounded-[6px] border border-white/[0.10] text-[#64748B] hover:text-white disabled:opacity-50"
                 aria-label="Close announcement"
               >
                 <X className="h-3.5 w-3.5" />
@@ -1032,7 +1032,7 @@ function TeamMembers() {
                   maxLength={120}
                   placeholder="Workspace update"
                   disabled={announcementLoading}
-                  className="mt-1 h-8 w-full rounded-[7px] border border-white/[0.12] bg-white/[0.045] px-3 text-[11px] font-semibold text-white outline-none placeholder:text-[#64748B] focus:border-[#2F80FF] disabled:opacity-60"
+                  className="settings-announcement-field mt-1 h-8 w-full rounded-[7px] border border-white/[0.12] bg-white/[0.045] px-3 text-[11px] font-semibold text-white outline-none placeholder:text-[#64748B] focus:border-[#2F80FF] disabled:opacity-60"
                 />
               </label>
 
@@ -1045,7 +1045,7 @@ function TeamMembers() {
                   rows={5}
                   placeholder="Share an update with the workspace."
                   disabled={announcementLoading}
-                  className="mt-1 w-full resize-none rounded-[7px] border border-white/[0.12] bg-white/[0.045] px-3 py-2 text-[11px] font-semibold leading-5 text-white outline-none placeholder:text-[#64748B] focus:border-[#2F80FF] disabled:opacity-60"
+                  className="settings-announcement-field mt-1 w-full resize-none rounded-[7px] border border-white/[0.12] bg-white/[0.045] px-3 py-2 text-[11px] font-semibold leading-5 text-white outline-none placeholder:text-[#64748B] focus:border-[#2F80FF] disabled:opacity-60"
                 />
               </label>
 
@@ -1055,7 +1055,7 @@ function TeamMembers() {
                   value={announcementForm.severity ?? "info"}
                   onChange={(event) => setAnnouncementForm((current) => ({ ...current, severity: event.target.value }))}
                   disabled={announcementLoading}
-                  className="mt-1 h-8 w-full rounded-[7px] border border-white/[0.12] bg-[#151925] px-3 text-[11px] font-bold text-white outline-none focus:border-[#2F80FF] disabled:opacity-60"
+                  className="settings-announcement-field mt-1 h-8 w-full rounded-[7px] border border-white/[0.12] bg-[#151925] px-3 text-[11px] font-bold text-white outline-none focus:border-[#2F80FF] disabled:opacity-60"
                 >
                   <option value="info">Information</option>
                   <option value="success">Success</option>
@@ -1071,12 +1071,12 @@ function TeamMembers() {
               ) : null}
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-white/[0.08] px-5 py-3">
+            <div className="settings-announcement-footer flex justify-end gap-2 border-t border-white/[0.08] px-5 py-3">
               <button
                 type="button"
                 onClick={() => setAnnouncementOpen(false)}
                 disabled={announcementLoading}
-                className="h-8 rounded-[7px] border border-white/[0.10] bg-white/[0.03] px-4 text-[11px] font-semibold text-[#64748B] hover:text-white disabled:opacity-50"
+                className="settings-announcement-cancel h-8 rounded-[7px] border border-white/[0.10] bg-white/[0.03] px-4 text-[11px] font-semibold text-[#64748B] hover:text-white disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -2155,25 +2155,30 @@ function SettingsPageContent() {
           background-color: #eef4ff !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-inactive,
         .dashboard-theme-light .settings-page .settings-user-nav-item-inactive {
           background-color: transparent !important;
           border-color: transparent !important;
           color: #475569 !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-inactive svg,
         .dashboard-theme-light .settings-page .settings-user-nav-item-inactive svg {
           color: #64748b !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-inactive:hover,
         .dashboard-theme-light .settings-page .settings-user-nav-item-inactive:hover {
           background-color: #eef4ff !important;
           color: #1d4ed8 !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-inactive:hover svg,
         .dashboard-theme-light .settings-page .settings-user-nav-item-inactive:hover svg {
           color: #2563eb !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-active,
         .dashboard-theme-light .settings-page .settings-user-nav-item-active {
           background-color: #eff6ff !important;
           border-color: #bfdbfe !important;
@@ -2181,8 +2186,55 @@ function SettingsPageContent() {
           box-shadow: inset 3px 0 0 #2f80ff, 0 8px 18px rgba(37, 99, 235, 0.08) !important;
         }
 
+        .dashboard-theme-light .settings-page .settings-admin-nav-item-active svg,
         .dashboard-theme-light .settings-page .settings-user-nav-item-active svg {
           color: #2563eb !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-user-workspace-banner {
+          background: #ffffff !important;
+          border-color: #d5deea !important;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-overlay {
+          background-color: rgba(15, 23, 42, 0.34) !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-modal {
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+          box-shadow: 0 28px 90px rgba(15, 23, 42, 0.22) !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-header,
+        .dashboard-theme-light .settings-page .settings-announcement-footer {
+          background-color: #ffffff !important;
+          border-color: #d5deea !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-field {
+          background-color: #ffffff !important;
+          border-color: #b9c6d8 !important;
+          color: #0f172a !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-field::placeholder {
+          color: #718096 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-close,
+        .dashboard-theme-light .settings-page .settings-announcement-cancel {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .settings-page .settings-announcement-close:hover,
+        .dashboard-theme-light .settings-page .settings-announcement-cancel:hover {
+          background-color: #eef4ff !important;
+          border-color: #93c5fd !important;
+          color: #0f172a !important;
         }
 
         .dashboard-theme-light .settings-page .settings-theme-option-inactive {
@@ -2211,27 +2263,32 @@ function SettingsPageContent() {
           color: #2563eb !important;
         }
 
+        .dashboard-theme-dark .settings-page .settings-admin-nav-item-inactive,
         .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive {
           background-color: transparent !important;
           border-color: transparent !important;
           color: #64748b !important;
         }
 
+        .dashboard-theme-dark .settings-page .settings-admin-nav-item-inactive svg,
         .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive svg {
           color: #64748b !important;
         }
 
+        .dashboard-theme-dark .settings-page .settings-admin-nav-item-inactive:hover,
         .dashboard-theme-dark .settings-page .settings-user-nav-item-inactive:hover {
           background-color: rgba(255, 255, 255, 0.03) !important;
           color: #94a3b8 !important;
         }
 
+        .dashboard-theme-dark .settings-page .settings-admin-nav-item-active,
         .dashboard-theme-dark .settings-page .settings-user-nav-item-active {
           background-color: #0d1b35 !important;
           border-color: #1b3b73 !important;
           color: #ffffff !important;
         }
 
+        .dashboard-theme-dark .settings-page .settings-admin-nav-item-active svg,
         .dashboard-theme-dark .settings-page .settings-user-nav-item-active svg {
           color: #2f80ff !important;
         }

@@ -106,9 +106,9 @@
 //     }
 
 //     console.groupCollapsed("ðŸŽ¯ [FORM POPULATION] Starting form field population process");
-//     console.log("ðŸ“Š Input data object:", data);
+//     console.log("ðŸ”Š Input data object:", data);
 //     console.log("ðŸ”¢ Total data fields:", Object.keys(data).length);
-//     console.log("ðŸ“ Data structure analysis:");
+//     console.log("ðŸ” Data structure analysis:");
 //     const dataAnalysis = Object.entries(data).reduce((acc, [ value]) => {
 //       const type = Array.isArray(value) ? `array[${value.length}]` : typeof value;
 //       acc[type] = (acc[type] || 0) + 1;
@@ -390,7 +390,7 @@
 //     let skippedCount = 0;
 
 //     console.log("ðŸ”„ [FORM POPULATION] Processing form fields...");
-//     console.log(`ðŸ“‹ Total form fields to process: ${Object.keys(map).length}`);
+//     console.log(`ðŸ”‹ Total form fields to process: ${Object.keys(map).length}`);
 
 //     for (const id of Object.keys(map)) {
 //       processedCount++;
@@ -424,7 +424,7 @@
 //         const current = (el.value || "").trim();
 //         if (current === "") {
 //           (el as HTMLElement).style.color = "#888"; // gray placeholder
-//           setPlaceholder(el, "â€”");
+//           setPlaceholder(el, "â€"");
 //         }
 //         skippedCount++;
 //         continue;
@@ -463,11 +463,11 @@
 //     }
     
 //     // Final summary
-//     console.groupCollapsed("ðŸ“Š [FORM POPULATION] Population Summary");
+//     console.groupCollapsed("ðŸ”Š [FORM POPULATION] Population Summary");
 //     console.log(`ðŸ”¢ Total fields processed: ${processedCount}`);
 //     console.log(`âœ… Successfully populated: ${populatedCount}`);
 //     console.log(`âš ï¸ Skipped/unchanged: ${skippedCount}`);
-//     console.log(`ðŸ“ˆ Success rate: ${processedCount > 0 ? Math.round((populatedCount / processedCount) * 100) : 0}%`);
+//     console.log(`ðŸ”ˆ Success rate: ${processedCount > 0 ? Math.round((populatedCount / processedCount) * 100) : 0}%`);
 //     console.groupEnd();
     
 //     // Output sanitized JSON (subset of filled fields)
@@ -481,7 +481,7 @@
 //         "ðŸ’¾ [FORM POPULATION] Final populated fields data"
 //       );
 //       console.log("ðŸŽ¯ Populated fields object:", filledSubset);
-//       console.log("ðŸ“ JSON representation:", JSON.stringify(filledSubset, null, 2));
+//       console.log("ðŸ” JSON representation:", JSON.stringify(filledSubset, null, 2));
 //       console.log("ðŸ”‘ Populated field names:", Object.keys(filledSubset));
 //       console.log("ðŸ”¢ Total populated fields:", Object.keys(filledSubset).length);
 //       console.groupEnd();
@@ -610,9 +610,9 @@
 //           console.groupCollapsed("ðŸ’¾ [DATABASE SAVE] Preparing to save AWB data to database");
 //           console.log("ðŸ†” User ID:", user.id);
 //           console.log("ðŸ¢ Company ID:", selectedCompanyId);
-//           console.log("ðŸ“„ AWB ID (if updating):", searchParams.get("awb_id") || "Creating new");
+//           console.log("ðŸ”„ AWB ID (if updating):", searchParams.get("awb_id") || "Creating new");
 //           console.log("ðŸ”¢ Total payload fields:", Object.keys(payload).length);
-//           console.log("ðŸ“Š Payload field analysis:");
+//           console.log("ðŸ”Š Payload field analysis:");
 //           const payloadAnalysis = Object.entries(payload).reduce((acc, [ value]) => {
 //             const type = typeof value;
 //             const isEmpty = !value || String(value).trim() === "";
@@ -625,7 +625,7 @@
 //           console.log("  Filled fields:", payloadAnalysis.filled);
 //           console.log("  Empty fields:", payloadAnalysis.empty);
 //           console.log("ðŸ’¾ Complete payload object:", payload);
-//           console.log("ðŸ“ Payload JSON string:", JSON.stringify(payload, null, 2));
+//           console.log("ðŸ” Payload JSON string:", JSON.stringify(payload, null, 2));
 //           console.log("ðŸŒ Full database request body:", JSON.stringify({
 //             companyId: selectedCompanyId,
 //             userId: user.id,
@@ -696,11 +696,11 @@
 //             console.groupCollapsed("âœ… [DATABASE SAVE] Successfully saved AWB data to database");
 //             console.log("ðŸŽ‰ Operation successful!");
 //             console.log("ðŸ†” AWB ID:", procJson.awbId);
-//             console.log("ðŸ“Š Response status:", procRes.status);
+//             console.log("ðŸ”Š Response status:", procRes.status);
 //             console.log("ðŸ’¾ Stored payload fields:", Object.keys(payload).length);
-//             console.log("ðŸ“„ Complete stored payload:", payload);
+//             console.log("ðŸ”„ Complete stored payload:", payload);
 //             console.log("ðŸŒ Full database response:", procJson);
-//             console.log("ðŸ“ Response JSON:", JSON.stringify(procJson, null, 2));
+//             console.log("ðŸ” Response JSON:", JSON.stringify(procJson, null, 2));
 //             console.groupEnd();
 //           } catch (logError) {
 //             console.error("ðŸ’¥ [DATABASE SAVE] Failed to log database success:", logError);
@@ -783,7 +783,7 @@
 //       if (!res.ok) {
 //         const txt = await res.text().catch(() => "");
 //         console.error("Generate failed", res.status, txt);
-//         alert("Generate failed: " + res.status + " â€” check console.");
+//         alert("Generate failed: " + res.status + " â€" check console.");
 //         setGenerating(false);
 //         return;
 //       }
@@ -806,7 +806,7 @@
 //       setGenerating(false);
 //     } catch (e) {
 //       console.error(e);
-//       alert("Generate failed â€” see console.");
+//       alert("Generate failed â€" see console.");
 //       setGenerating(false);
 //     }
 //   }
@@ -967,7 +967,7 @@
 //       }
 //     } catch (e) {
 //       console.error(e);
-//       alert("Save draft failed â€” see console.");
+//       alert("Save draft failed â€" see console.");
 //     }
 //   }
 
@@ -1178,9 +1178,9 @@
 //           </div>
 
 //           {/* 1.1.4 -> fourth row left */}
-//           {/* 1.1.4 â€” compact, labels inside boxes with 6px font */}
+//           {/* 1.1.4 â€" compact, labels inside boxes with 6px font */}
 //           <div className="p-1 border-r min-h-0 flex flex-col gap-[4px] overflow-hidden">
-//             {/* Block 1 â€” Airport of Departure */}
+//             {/* Block 1 â€" Airport of Departure */}
 //             <div className="flex flex-col">
 //               <label className="text-[7px] font-bold leading-none">
 //                 Airport of Departure (Addr. of First Carrier and Requested
@@ -1193,11 +1193,11 @@
 //               />
 //             </div>
 
-//             {/* Block 2 â€” 1:4:1:1:1:1 with smaller label font */}
+//             {/* Block 2 â€" 1:4:1:1:1:1 with smaller label font */}
 //             <div className="grid grid-cols-[1fr_4fr_1fr_1fr_1fr_1fr] gap-[2px]">
-//               {/* col 1 â€” to */}
+//               {/* col 1 â€" to */}
 //               <div className="relative h-7 border border-black flex items-end"></div>
-//               {/* col 5 â€” to */}
+//               {/* col 5 â€" to */}
 //               <div className="relative h-7 border border-black flex items-end">
 //                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
 //                   to
@@ -1209,7 +1209,7 @@
 //                 />
 //               </div>
 
-//               {/* col 6 â€” by */}
+//               {/* col 6 â€" by */}
 //               <div className="relative h-7 border border-black flex items-end">
 //                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
 //                   by
@@ -1222,9 +1222,9 @@
 //               </div>
 //             </div>
 
-//             {/* Block 3 â€” bottom row */}
+//             {/* Block 3 â€" bottom row */}
 //             <div className="grid grid-cols-2 gap-[6px]">
-//               {/* left half â€” Airport of Destination */}
+//               {/* left half â€" Airport of Destination */}
 //               <div className="relative h-7 border border-black flex items-end">
 //                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
 //                   Airport of Destination
@@ -1236,7 +1236,7 @@
 //                 />
 //               </div>
 
-//               {/* right half â€” Requested Flight/Date */}
+//               {/* right half â€" Requested Flight/Date */}
 //               <div className="relative h-7 border border-black flex items-end">
 //                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
 //                   Requested Flight/Date
@@ -1262,9 +1262,9 @@
 //           </div>
 
 //           {/* 1.2.4 -> fourth row right */}
-//           {/* 1.2.4 â€” grid rows so total height always matches; Row 2 taller */}
+//           {/* 1.2.4 â€" grid rows so total height always matches; Row 2 taller */}
 //           <div className="p-1 min-h-0 grid grid-rows-[1fr_1.4fr_1fr] gap-[2px] overflow-hidden">
-//             {/* Row 1 â€” 1.3 : 1 : 1 */}
+//             {/* Row 1 â€" 1.3 : 1 : 1 */}
 //             <div className="grid grid-cols-[1.3fr_2fr] gap-[2px] min-h-0">
 //               <div className="relative h-full border border-black flex flex-col justify-end min-w-0 px-1">
 //                 {/* heading/label */}
@@ -1297,7 +1297,7 @@
 //               </div>
 //             </div>
 
-//             {/* Row 2 â€” 1.3 : 1 : 1 (taller via grid rows) */}
+//             {/* Row 2 â€" 1.3 : 1 : 1 (taller via grid rows) */}
 //             <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-[2px] min-h-0">
 //               {/* LEFT SPLIT -> 4 cols (2 : 1.5 : 2.5 : 2.5) */}
 //               <div className="grid grid-cols-[2fr_1.5fr_2.5fr_2.5fr] gap-[2px] min-h-0 min-w-0">
@@ -1419,7 +1419,7 @@
 //               </div>
 //             </div>
 
-//             {/* Row 3 â€” 1 : 2 */}
+//             {/* Row 3 â€" 1 : 2 */}
 //             <div className="grid grid-cols-[1fr_2fr] gap-[2px] min-h-0">
 //               <div className="relative h-full border border-black flex items-end px-1 min-w-0">
 //                 <span className="absolute top-[1px] left-[2px] text-[6px] font-bold leading-none">
@@ -1495,7 +1495,7 @@
 //           <div className="flex-1 grid grid-rows-[1fr_18px]">
 //             {/* TOP ROW (table body) */}
 //             <div className="grid grid-cols-[1fr_2fr_0.5fr_2fr_2fr_2fr_3fr_6fr]">
-//               {/* Col 1 â€” No. of Pieces */}
+//               {/* Col 1 â€" No. of Pieces */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   No. of Pieces RCP
@@ -1507,7 +1507,7 @@
 //                 />
 //               </div>
 
-//               {/* Col 2 â€” Gross Weight */}
+//               {/* Col 2 â€" Gross Weight */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   Gross Weight
@@ -1519,7 +1519,7 @@
 //                 />
 //               </div>
 
-//               {/* Col 3 â€” KG / lb */}
+//               {/* Col 3 â€" KG / lb */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   KG / lb
@@ -1533,7 +1533,7 @@
 //                 </div>
 //               </div>
 
-//               {/* Col 4 â€” Rate Class (1 : 4 with Commodity Item No. split into 2 inputs) */}
+//               {/* Col 4 â€" Rate Class (1 : 4 with Commodity Item No. split into 2 inputs) */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 text-[7px] font-bold flex items-center justify-center text-center">
 //                   Rate Class
@@ -1560,7 +1560,7 @@
 //                 </div>
 //               </div>
 
-//               {/* Col 5 â€” Chargeable Weight */}
+//               {/* Col 5 â€" Chargeable Weight */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   Chargeable Weight
@@ -1572,7 +1572,7 @@
 //                 />
 //               </div>
 
-//               {/* Col 6 â€” Rate / Charge */}
+//               {/* Col 6 â€" Rate / Charge */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   Rate / Charge
@@ -1584,7 +1584,7 @@
 //                 />
 //               </div>
 
-//               {/* Col 7 â€” Total */}
+//               {/* Col 7 â€" Total */}
 //               <div className="flex flex-col border-r border-black">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   Total
@@ -1596,7 +1596,7 @@
 //                 />
 //               </div>
 
-//               {/* Col 8 â€” Nature & Quantity of Goods */}
+//               {/* Col 8 â€" Nature & Quantity of Goods */}
 //               <div className="flex flex-col">
 //                 <div className="h-6 border-b border-black text-[7px] font-bold flex items-center justify-center text-center">
 //                   Nature and Quantity of Goods (incl. Dimensions or Volume)
@@ -1649,8 +1649,8 @@
 //         </div>
 
 //         {/* SECTION 3 (30% height) */}
-//         {/* SECTION 3 â€” fills remaining space exactly */}
-//         {/* SECTION 3 â€” exactly 3 rows, each 2 cols (1 : 1.5) */}
+//         {/* SECTION 3 â€" fills remaining space exactly */}
+//         {/* SECTION 3 â€" exactly 3 rows, each 2 cols (1 : 1.5) */}
 //         <div className="flex-1 min-h-0 border-b border-black grid grid-rows-3">
 //           {/* ===== Row 1 ===== */}
 //           <div className="grid grid-cols-[1fr_1.5fr] border-b border-black min-h-0">
@@ -2006,7 +2006,7 @@
 //             <div className="grid grid-rows-[2fr_1fr] min-h-0">
 //               {/* Row 1: now with a top bar + two stacked sub-rows */}
 //               <div className="grid grid-rows-[auto_1fr_auto] border-b border-black min-h-0">
-//                 {/* NEW top row â€” Print Time */}
+//                 {/* NEW top row â€" Print Time */}
 //                 <div className="flex items-center px-2 py-1 gap-2 text-[9px] font-bold">
 //                   <label className="shrink-0">Print Time:</label>
 //                   <input
@@ -2017,7 +2017,7 @@
 //                   />
 //                 </div>
 
-//                 {/* Middle row â€” three fields with dotted lines */}
+//                 {/* Middle row â€" three fields with dotted lines */}
 //                 <div className="grid grid-cols-3 gap-2 items-end px-2">
 //                   {/* Executed on (Date) */}
 //                   <div className="flex flex-col items-center">
@@ -2053,7 +2053,7 @@
 //                   </div>
 //                 </div>
 
-//                 {/* Bottom row â€” captions */}
+//                 {/* Bottom row â€" captions */}
 //                 <div className="grid grid-cols-3 text-[7px] text-center leading-tight px-2 pb-1">
 //                   <div>Executed on (Date)</div>
 //                   <div>at (Place)</div>
@@ -2063,7 +2063,7 @@
 
 //               {/* ===== Row 2 ===== */}
 //               <div className="grid grid-cols-[1fr_2fr] border-b border-black min-h-0">
-//                 {/* LEFT â€” compact header/body with borders */}
+//                 {/* LEFT â€" compact header/body with borders */}
 //                 <div className="border-r border-black grid grid-rows-[12px_1fr] min-h-0">
 //                   {/* header (shorter height) */}
 //                   <div className="border-b border-black flex items-center justify-center text-[6px] font-bold leading-none">
@@ -2259,7 +2259,9 @@ const MODERN_AWB_PRESENTATION_FIELDS: AwbPresentationField[] = [
   { id: "requested-date", keys: ["flight_date", "Requested Flight Date"] },
   { id: "handling-information", keys: ["handling_info", "Handling Information"] },
   { id: "pieces", keys: ["pieces_value", "Pieces"] },
+  { id: "pieces-line", keys: ["pieces_line", "Pieces Line"] },
   { id: "gross-weight", keys: ["gross_weight", "Gross weight"] },
+  { id: "weight-line", keys: ["weight_line", "Weight Line"] },
   { id: "weight-unit", keys: ["weight_unit"] },
   { id: "chargeable-weight", keys: ["chargeable_weight", "Chargeable weight"] },
   {
@@ -2410,6 +2412,7 @@ export function getAwbReviewPresentationStats(
       : null;
 
   return {
+    total: values.length,
     extracted,
     review,
     empty: values.length - extracted,
@@ -2428,6 +2431,7 @@ type ElementWithDataset = (
 function AwbPaperCell({
   id,
   label,
+  disabled,
   multiline = false,
   compact = false,
   className = "",
@@ -2439,6 +2443,7 @@ function AwbPaperCell({
 }: {
   id?: string;
   label: string;
+  disabled?: boolean;
   multiline?: boolean;
   compact?: boolean;
   className?: string;
@@ -2448,65 +2453,104 @@ function AwbPaperCell({
   needsReview?: boolean;
   manualUpdated?: boolean;
 }) {
+  // Cells without an id are presentation-only and must stay non-interactive.
+  // Cells with an id are data-backed; their disabled state is managed explicitly
+  // to prevent React from fighting the DOM-manipulation approach in AwbFormInner.
+  const isDisabled = disabled !== undefined ? disabled : !id;
   const confidencePercent =
     confidence == null ? null : Math.round(confidence * 100);
   const visualStyles = FIELD_VISUAL_STYLES[tone];
-  const fieldClass = `${
-    compact
-      ? "mt-[15px] px-1 py-0.5 text-[8px] leading-[1.2]"
-      : "mt-[17px] px-1.5 py-1 text-[10px] leading-[1.35]"
-  } min-h-0 min-w-0 max-w-full w-full flex-1 rounded-[3px] border-0 font-semibold text-slate-900 outline-none placeholder:text-[7px] placeholder:font-normal placeholder:italic placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400 ${inputClassName}`;
   const badgeText = manualUpdated
     ? "Updated"
     : confidencePercent == null
       ? null
       : `${confidencePercent}%`;
+  const isPlaceholderOnly = !id && !multiline;
+  const valueTopOffset = compact ? "mt-1" : label ? "mt-1.5" : "mt-1";
+  const valueSizing = isPlaceholderOnly
+    ? "h-[19px] flex-none"
+    : multiline
+      ? "min-h-[32px] flex-1"
+      : "h-[22px] flex-none";
+  const valueWidth = "min-w-0 max-w-full w-full";
+  const cellMinHeight = compact
+    ? "min-h-[44px]"
+    : multiline
+      ? "min-h-[52px]"
+      : isPlaceholderOnly
+        ? "min-h-[48px]"
+        : "min-h-[46px]";
+  const labelMinHeight = compact ? "min-h-[18px]" : "min-h-[18px]";
+  const labelPadding = badgeText != null
+    ? manualUpdated
+      ? "pr-[42px]"
+      : "pr-[32px]"
+    : "";
+  const fieldClass = `${
+    compact
+      ? `${valueTopOffset} px-1 py-0.5 text-[8px] leading-[1.2]`
+      : `${valueTopOffset} px-1.5 py-1 text-[10px] leading-[1.35]`
+  } ${valueSizing} ${valueWidth} rounded-[3px] border-0 font-medium text-slate-900 outline-none placeholder:text-[7px] placeholder:font-normal placeholder:italic placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400 ${inputClassName}`;
   return (
     <div
-      className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-b border-slate-300 px-[5px] pb-[4px] pt-[3px] ${visualStyles.cell} ${className}`}
+      className={`relative flex ${cellMinHeight} min-w-0 flex-col overflow-hidden border-r border-b border-slate-300 px-[5px] pb-[4px] pt-[3px] ${visualStyles.cell} ${className}`}
     >
-      <span
-        className={`absolute left-[6px] right-[5px] top-[3px] overflow-hidden font-bold uppercase tracking-[0.02em] text-slate-500 ${
-          compact
-            ? "max-h-[12px] whitespace-normal text-[6px] leading-[1.05]"
-            : "truncate whitespace-nowrap text-[7px]"
-        } ${
-          badgeText == null
-            ? ""
-            : manualUpdated
-              ? "pr-[52px]"
-              : "pr-[42px]"
-        }`}
-      >
-        {label}
-      </span>
-      {badgeText != null ? (
-        <span
-          className={`absolute right-[5px] top-[3px] rounded-[4px] border px-[4px] py-[1px] font-mono text-[7px] font-extrabold leading-none ${visualStyles.badge}`}
-          title={
-            manualUpdated
-              ? "Human updated"
-              : `${confidencePercent}% extraction confidence${
-                  needsReview ? " - review required" : ""
-                }`
-          }
+      {label ? (
+        <div
+          className={`relative ${labelMinHeight} ${labelPadding}`}
         >
-          {badgeText}
-        </span>
+          <span
+            className={`block whitespace-normal break-words font-bold uppercase leading-[1.08] tracking-[0.02em] text-slate-500 ${
+              compact ? "text-[8px]" : "text-[9px]"
+            }`}
+          >
+            {label}
+          </span>
+          {badgeText != null ? (
+            <span
+              className={`absolute right-0 top-0 rounded-[4px] border px-[3px] py-[1px] font-mono text-[6px] font-extrabold leading-none ${visualStyles.badge}`}
+              title={
+                manualUpdated
+                  ? "Human updated"
+                  : `${confidencePercent}% extraction confidence${needsReview ? " - review required" : ""}`
+              }
+            >
+              {badgeText}
+            </span>
+          ) : null}
+        </div>
+      ) : badgeText != null ? (
+          <span
+            className={`absolute right-[5px] top-[3px] rounded-[4px] border px-[4px] py-[1px] font-mono text-[7px] font-extrabold leading-none ${visualStyles.badge}`}
+            title={
+              manualUpdated
+                ? "Human updated"
+                : `${confidencePercent}% extraction confidence${
+                    needsReview ? " - review required" : ""
+                  }`
+            }
+          >
+            {badgeText}
+          </span>
       ) : null}
       {multiline ? (
         <textarea
           id={id}
-          disabled
+          disabled={isDisabled}
           rows={2}
           placeholder="Not extracted"
-          className={`${fieldClass} resize-none`}
+          className={`${fieldClass} resize-none whitespace-pre-wrap break-words overflow-hidden`}
           style={{ backgroundColor: visualStyles.inputBackground }}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
         />
       ) : (
         <input
           id={id}
-          disabled
+          disabled={isDisabled}
           type="text"
           placeholder="Not extracted"
           className={fieldClass}
@@ -2526,14 +2570,14 @@ function AwbPaperNotice({
 }) {
   return (
     <div
-      className={`border-r border-b border-slate-300 bg-white p-[6px] text-[6px] leading-[1.45] text-slate-500 ${className}`}
+      className={`relative flex min-h-[46px] min-w-0 flex-col overflow-hidden border-r border-b border-slate-300 bg-white px-[5px] pb-[4px] pt-[3px] text-[7px] leading-[1.45] text-slate-500 ${className}`}
     >
       {children}
     </div>
   );
 }
 
-function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
+export function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
   const confidenceProps = (id: string) => {
     const field = MODERN_AWB_PRESENTATION_FIELDS.find(
       (candidate) => candidate.id === id
@@ -2548,8 +2592,8 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
   };
 
   return (
-    <div className="awb-modern-paper aspect-[210/297] w-full overflow-hidden rounded-[4px] border border-slate-300 bg-white font-sans text-slate-800 shadow-[0_1px_0_rgba(255,255,255,0.7)]">
-      <div className="grid h-full grid-rows-[12%_12%_9%_14%_7%_15%_9%_10%_12%]">
+    <div className="awb-modern-paper w-full overflow-visible rounded-[4px] border border-slate-300 bg-white font-sans text-slate-800">
+      <div className="grid grid-rows-[minmax(100px,auto)_minmax(100px,auto)_minmax(75px,auto)_minmax(115px,auto)_minmax(58px,auto)_minmax(125px,auto)_minmax(75px,auto)_minmax(83px,auto)_minmax(100px,auto)]">
         <div className="grid min-h-0 grid-cols-2">
           <div className="grid min-h-0 grid-cols-[57%_43%] border-r border-slate-300">
             <AwbPaperCell
@@ -2563,8 +2607,8 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
             <AwbPaperCell label="Shipper's Account No." />
             <AwbPaperCell label="Phone" />
           </div>
-          <div className="grid min-h-0 grid-cols-[26%_74%] grid-rows-[42%_58%]">
-            <div className="col-span-2 flex items-center justify-between border-b border-slate-300 px-3">
+          <div className="grid min-h-0 grid-cols-[26%_74%] grid-rows-[minmax(56px,auto)_minmax(64px,auto)]">
+            <div className="col-span-2 flex min-h-[56px] items-center justify-between border-b border-slate-300 pl-3 pr-0">
               <div>
                 <div className="text-[6px] font-semibold text-slate-500">Not Negotiable</div>
                 <div className="mt-0.5 text-[13px] font-extrabold">Air Waybill</div>
@@ -2572,12 +2616,13 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
               <AwbPaperCell
                 id="shipment-referente-number"
                 label="AWB Number"
-                className="h-full w-[52%] border-b-0 border-r-0"
-                inputClassName="font-mono text-[12px] font-bold text-blue-600"
+                compact
+                className="h-full min-h-0 w-[52%] overflow-hidden border-b-0 border-r-0"
+                inputClassName="h-[16px] py-0 font-mono text-[11px] font-bold leading-[16px] text-blue-600"
                 {...confidenceProps("shipment-referente-number")}
               />
             </div>
-            <div className="flex items-center border-b border-r border-slate-300 px-2 text-[7px] font-bold">
+            <div className="flex items-center border-b border-r border-slate-300 px-2 text-[8px] font-bold">
               Issued by
             </div>
             <AwbPaperCell
@@ -2611,7 +2656,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
         </div>
 
         <div className="grid min-h-0 grid-cols-2">
-          <div className="grid min-h-0 grid-rows-[58%_42%] border-r border-slate-300">
+          <div className="grid min-h-0 grid-rows-[minmax(52px,auto)_minmax(46px,auto)] border-r border-slate-300">
             <AwbPaperCell label="Issuing Carrier's Agent Name and City" multiline className="border-r-0" />
             <div className="grid min-h-0 grid-cols-2">
               <AwbPaperCell label="Agent's IATA Code" />
@@ -2622,7 +2667,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
         </div>
 
         <div className="grid min-h-0 grid-cols-2">
-          <div className="grid min-h-0 grid-rows-[34%_28%_38%] border-r border-slate-300">
+          <div className="grid min-h-0 grid-rows-[minmax(48px,auto)_minmax(44px,auto)_minmax(44px,auto)] border-r border-slate-300">
             <AwbPaperCell
               id="departure-airport"
               label="Airport of Departure and Requested Routing"
@@ -2652,7 +2697,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
               />
             </div>
           </div>
-          <div className="grid min-h-0 grid-rows-[28%_36%_36%]">
+          <div className="grid min-h-0 grid-rows-[minmax(44px,auto)_minmax(44px,auto)_minmax(44px,auto)]">
             <div className="grid min-h-0 grid-cols-[42%_58%]">
               <AwbPaperCell label="Reference Number" />
               <AwbPaperCell label="Optional Shipping Information" className="border-r-0" />
@@ -2684,56 +2729,91 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
           <AwbPaperCell label="Other Customs Information" multiline className="border-r-0" />
         </div>
 
-        <div className="grid min-h-0 grid-cols-[9%_13%_9%_14%_12%_11%_32%]">
-          <AwbPaperCell
-            id="pieces"
-            label="No. of Pieces RCP"
-            inputClassName="text-center font-bold"
-            {...confidenceProps("pieces")}
-          />
-          <div className="grid min-h-0 grid-cols-[72%_28%]">
+        <div className="border-t-2 border-slate-400">
+          {/* Data entry row — editable cells with label + input */}
+          <div className="grid min-h-0 grid-cols-[9%_16%_9%_14%_12%_8%_32%]">
             <AwbPaperCell
-              id="gross-weight"
-              label="Gross Weight"
+              compact
+              id="pieces"
+              label="No. of Pieces RCP"
               inputClassName="text-center font-bold"
-              {...confidenceProps("gross-weight")}
+              {...confidenceProps("pieces")}
             />
+            <div className="grid min-h-0 grid-cols-[62%_38%]">
+              <AwbPaperCell
+                compact
+                id="gross-weight"
+                label="Gross Weight"
+                inputClassName="text-center font-bold"
+                {...confidenceProps("gross-weight")}
+              />
+              <AwbPaperCell
+                compact
+                id="weight-unit"
+                label="kg / lb"
+                inputClassName="text-center font-bold text-[9px]"
+                {...confidenceProps("weight-unit")}
+              />
+            </div>
+            <AwbPaperCell compact label="Rate Class" inputClassName="text-center" />
             <AwbPaperCell
-              id="weight-unit"
-              label="Unit"
+              compact
+              id="chargeable-weight"
+              label="Chargeable Weight"
               inputClassName="text-center font-bold"
-              {...confidenceProps("weight-unit")}
+              {...confidenceProps("chargeable-weight")}
             />
+            <AwbPaperCell compact label="Rate / Charge" inputClassName="text-center" />
+            <AwbPaperCell compact label="Total" inputClassName="text-center" />
+            <div className="grid grid-rows-[auto_auto]">
+              <AwbPaperCell
+                id="nature-and-quantity-of-goods"
+                label="Nature and Quantity of Goods"
+                multiline
+                className="border-r-0"
+                {...confidenceProps("nature-and-quantity-of-goods")}
+              />
+              <AwbPaperCell
+                id="dimensions-or-volume"
+                label="Dimensions or Volume"
+                multiline
+                className="border-r-0"
+                {...confidenceProps("dimensions-or-volume")}
+              />
+            </div>
           </div>
-          <AwbPaperCell label="Rate Class" inputClassName="text-center" />
-          <AwbPaperCell
-            id="chargeable-weight"
-            label="Chargeable Weight"
-            inputClassName="text-center font-bold"
-            {...confidenceProps("chargeable-weight")}
-          />
-          <AwbPaperCell label="Rate / Charge" inputClassName="text-center" />
-          <AwbPaperCell label="Total" inputClassName="text-center" />
-          <div className="grid min-h-0 grid-rows-[68%_32%]">
+
+          {/* Bottom AWB result line — line-level fields belong at the end of their columns */}
+          <div className="grid grid-cols-[9%_16%_9%_14%_12%_8%_32%] border-t-[1.5px] border-slate-500">
             <AwbPaperCell
-              id="nature-and-quantity-of-goods"
-              label="Nature and Quantity of Goods"
-              multiline
-              className="border-r-0"
-              {...confidenceProps("nature-and-quantity-of-goods")}
+              compact
+              id="pieces-line"
+              label="Pieces Line"
+              inputClassName="text-center font-bold"
+              {...confidenceProps("pieces-line")}
             />
-            <AwbPaperCell
-              id="dimensions-or-volume"
-              label="Dimensions or Volume"
-              multiline
-              className="border-r-0"
-              {...confidenceProps("dimensions-or-volume")}
-            />
+            <div className="grid grid-cols-[62%_38%]">
+              <AwbPaperCell
+                compact
+                id="weight-line"
+                label="Weight Line"
+                inputClassName="text-center font-bold"
+                {...confidenceProps("weight-line")}
+              />
+              {/* kg/lb — plain empty */}
+              <div className="min-h-[22px] border-r border-b border-slate-300" />
+            </div>
+            {/* All remaining columns — plain empty boxes */}
+            <div className="min-h-[22px] border-r border-b border-slate-300" />
+            <div className="min-h-[22px] border-r border-b border-slate-300" />
+            <div className="min-h-[22px] border-r border-b border-slate-300" />
+            <div className="min-h-[22px] border-r border-b border-slate-300" />
+            <div className="min-h-[22px] border-b border-slate-300" />
           </div>
         </div>
 
         <div className="grid min-h-0 grid-cols-[37.5%_62.5%]">
-          <div className="grid min-h-0 grid-rows-3 border-r border-slate-300">
+          <div className="grid min-h-0 grid-rows-[repeat(3,minmax(44px,auto))] border-r border-slate-300">
             {["Weight Charge", "Valuation Charge", "Tax"].map((label) => (
               <div key={label} className="grid min-h-0 grid-cols-2">
                 <AwbPaperCell compact label={`${label} Prepaid`} />
@@ -2751,7 +2831,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
         </div>
 
         <div className="grid min-h-0 grid-cols-[37.5%_62.5%]">
-          <div className="grid min-h-0 grid-rows-3 border-r border-slate-300">
+          <div className="grid min-h-0 grid-rows-[repeat(3,minmax(44px,auto))] border-r border-slate-300">
             <div className="grid min-h-0 grid-cols-2">
               <AwbPaperCell compact label="Total Other Charges Due Agent - Prepaid" />
               <AwbPaperCell compact label="Collect" className="border-r-0" />
@@ -2762,7 +2842,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
             </div>
             <div className="border-b border-slate-300 bg-slate-100" />
           </div>
-          <div className="grid min-h-0 grid-rows-[60%_40%]">
+          <div className="grid min-h-0 grid-rows-[minmax(70px,auto)_minmax(46px,auto)]">
             <AwbPaperNotice className="border-r-0 text-[7px] leading-[1.5]">
               Shipper certifies that the particulars on the face hereof are
               correct and that dangerous goods, if any, are properly described
@@ -2778,7 +2858,7 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
         </div>
 
         <div className="grid min-h-0 grid-cols-[37.5%_62.5%]">
-          <div className="grid min-h-0 grid-rows-3 border-r border-slate-300">
+          <div className="grid min-h-0 grid-rows-[repeat(3,minmax(44px,auto))] border-r border-slate-300">
             <div className="grid min-h-0 grid-cols-2">
               <AwbPaperCell compact label="Total Prepaid" />
               <AwbPaperCell compact label="Total Collect" className="border-r-0" />
@@ -2792,21 +2872,26 @@ function ModernAwbPaper({ data }: { data?: AwbPayload | null }) {
               <AwbPaperCell compact label="Charges at Destination" className="border-r-0" />
             </div>
           </div>
-          <div className="grid min-h-0 grid-rows-[30%_42%_28%]">
+          <div className="grid min-h-0 grid-rows-[minmax(42px,auto)_minmax(44px,auto)_minmax(44px,auto)]">
             <AwbPaperCell compact label="Print Time" className="border-r-0" />
             <div className="grid min-h-0 min-w-0 grid-cols-[28%_22%_50%]">
               <AwbPaperCell compact label="Executed on (Date)" />
               <AwbPaperCell compact label="At (Place)" />
               <AwbPaperCell compact label="Signature of Carrier / Agent" className="border-r-0" />
             </div>
-            <div className="grid min-h-0 min-w-0 grid-cols-[34%_66%]">
-              <AwbPaperCell compact label="Total Collect Charges" />
+            <div className="grid min-h-[42px] min-w-0 grid-cols-[34%_66%]">
+              <AwbPaperCell
+                compact
+                label="Total Collect Charges"
+                className="overflow-hidden"
+                inputClassName="!mt-0 h-[17px] py-0 leading-[17px]"
+              />
               <AwbPaperCell
                 compact
                 id="bottom-awb-number"
                 label="AWB Number"
-                className="border-r-0"
-                inputClassName="text-center font-mono text-[11px] font-bold text-blue-600"
+                className="overflow-hidden border-r-0"
+                inputClassName="!mt-0 h-[17px] py-0 text-center font-mono text-[11px] font-bold leading-[17px] text-blue-600"
                 {...confidenceProps("shipment-referente-number")}
               />
             </div>
@@ -2845,6 +2930,8 @@ function AwbFormInner({
   const router = useRouter();
   const searchParams = useSearchParams(); // âœ… still here, but safe inside Suspense
   const formRef = useRef<HTMLElement | null>(null);
+  const onFieldChangeRef = useRef(onFieldChange);
+  const dataShapeRef = useRef("");
   const [generating, setGenerating] = useState(false);
   const [downloadStep, setDownloadStep] = useState("Preparing secure AWB draft");
   // const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -2864,6 +2951,10 @@ function AwbFormInner({
     message: "",
     color: "emerald", // default green
   });
+
+  useEffect(() => {
+    onFieldChangeRef.current = onFieldChange;
+  }, [onFieldChange]);
 
   // Ensure outbound payload contains only values (flattens [value, confidence] arrays)
   // function sanitizeExtractionPayload(
@@ -2888,6 +2979,8 @@ function AwbFormInner({
     if (!form) return;
     const formElement: HTMLElement = form;
     const listenerCleanups: Array<() => void> = [];
+    const dataShape = data ? Object.keys(data).sort().join("|") : "";
+    const shouldResetForm = dataShapeRef.current !== dataShape;
 
     function resetFormInputsAndVisuals() {
       const fields = formElement.querySelectorAll<
@@ -2909,7 +3002,10 @@ function AwbFormInner({
       });
     }
 
-    resetFormInputsAndVisuals();
+    if (shouldResetForm) {
+      resetFormInputsAndVisuals();
+      dataShapeRef.current = dataShape;
+    }
 
     if (!data) {
       return;
@@ -2952,7 +3048,9 @@ function AwbFormInner({
       "handling-information": ["handling_info", "Handling Information"],
       "special-handling-codes": ["special_codes"],
       "pieces": ["pieces_value", "Pieces"],
+      "pieces-line": ["pieces_line", "Pieces Line"],
       "gross-weight": ["gross_weight", "Gross weight"],
+      "weight-line": ["weight_line", "Weight Line"],
       "chargeable-weight": ["chargeable_weight", "Chargeable weight"],
       "dimensions-or-volume": ["dimensions_or_volume"],
       // Include canonical key saved by Generate AWB
@@ -3244,8 +3342,8 @@ function AwbFormInner({
       }
       const payloadKey = map[id].find((candidate) => candidate in data) || map[id][0];
       const handleMappedInput = (event: Event) => {
-        if (event.isTrusted && onFieldChange) {
-          onFieldChange(payloadKey, el.value);
+        if (event.isTrusted && onFieldChangeRef.current) {
+          onFieldChangeRef.current(payloadKey, el.value);
         }
       };
       el.addEventListener("input", handleMappedInput);
@@ -3262,7 +3360,9 @@ function AwbFormInner({
       }
 
       const before = el.value ?? "";
-      setElementValueById(id, str);
+      if (document.activeElement !== el) {
+        setElementValueById(id, str);
+      }
       const after = el.value ?? "";
       if (after !== before) {
         filledSubset[id] = after;
@@ -3281,7 +3381,7 @@ function AwbFormInner({
       window as unknown as { __AWB_AUTO_FILLED__?: Record<string, unknown> }
     ).__AWB_AUTO_FILLED__ = filledSubset;
     return () => listenerCleanups.forEach((cleanup) => cleanup());
-  }, [data, onFieldChange]);
+  }, [data]);
 
   async function handleGenerateFromForm() {
     setGenerating(true);
@@ -3320,8 +3420,10 @@ function AwbFormInner({
       "special-handling-codes": "special_codes",
       "other-customs-information": "other_customs_info",
       "pieces": "pieces_value",
+      "pieces-line": "pieces_line",
       "pieces_value_total": "pieces_value_total",
       "gross-weight": "gross_weight",
+      "weight-line": "weight_line",
       "gross_weight_total": "gross_weight_total",
       "weight-unit": "weight_unit",
       "rate-class-code": "rate_class_value_side_left",
@@ -3404,9 +3506,9 @@ function AwbFormInner({
           console.groupCollapsed("ðŸ’¾ [DATABASE SAVE] Preparing to save AWB data to database");
           console.log("ðŸ†” User ID:", user.id);
           console.log("ðŸ¢ Company ID:", selectedCompanyId);
-          console.log("ðŸ“„ AWB ID (if updating):", searchParams.get("awb_id") || "Creating new");
+          console.log("ðŸ”„ AWB ID (if updating):", searchParams.get("awb_id") || "Creating new");
           console.log("ðŸ”¢ Total payload fields:", Object.keys(payload).length);
-          console.log("ðŸ“Š Payload field analysis:");
+          console.log("ðŸ”Š Payload field analysis:");
           const payloadAnalysis = Object.entries(payload).reduce((acc, [ value]) => {
             const type = typeof value;
             const isEmpty = !value || String(value).trim() === "";
@@ -3419,7 +3521,7 @@ function AwbFormInner({
           console.log("  Filled fields:", payloadAnalysis.filled);
           console.log("  Empty fields:", payloadAnalysis.empty);
           console.log("ðŸ’¾ Complete payload object:", payload);
-          console.log("ðŸ“ Payload JSON string:", JSON.stringify(payload, null, 2));
+          console.log("ðŸ” Payload JSON string:", JSON.stringify(payload, null, 2));
           console.log("ðŸŒ Full database request body:", JSON.stringify({
             companyId: selectedCompanyId,
             userId: user.id,
@@ -3490,11 +3592,11 @@ function AwbFormInner({
             console.groupCollapsed("âœ… [DATABASE SAVE] Successfully saved AWB data to database");
             console.log("ðŸŽ‰ Operation successful!");
             console.log("ðŸ†” AWB ID:", procJson.awbId);
-            console.log("ðŸ“Š Response status:", procRes.status);
+            console.log("ðŸ”Š Response status:", procRes.status);
             console.log("ðŸ’¾ Stored payload fields:", Object.keys(payload).length);
-            console.log("ðŸ“„ Complete stored payload:", payload);
+            console.log("ðŸ”„ Complete stored payload:", payload);
             console.log("ðŸŒ Full database response:", procJson);
-            console.log("ðŸ“ Response JSON:", JSON.stringify(procJson, null, 2));
+            console.log("ðŸ” Response JSON:", JSON.stringify(procJson, null, 2));
             console.groupEnd();
           } catch (logError) {
             console.error("ðŸ’¥ [DATABASE SAVE] Failed to log database success:", logError);
@@ -3653,8 +3755,10 @@ function AwbFormInner({
       "special-handling-codes": "special_codes",
       "other-customs-information": "other_customs_info",
       "pieces": "pieces_value",
+      "pieces-line": "pieces_line",
       "pieces_value_total": "pieces_value_total",
       "gross-weight": "gross_weight",
+      "weight-line": "weight_line",
       "gross_weight_total": "gross_weight_total",
       "weight-unit": "weight_unit",
       "rate-class-code": "rate_class_value_side_left",
@@ -3781,7 +3885,37 @@ function AwbFormInner({
     }
   }
 
-  
+  // Compact dot badge for narrow columns in the charges block
+  const blockDot = (keys: string[]) => {
+    const pv = presentationValueForKeys(data, keys);
+    if (pv.confidence == null && !pv.needsReview) return null;
+    const styles = FIELD_VISUAL_STYLES[pv.tone];
+    const pct = pv.confidence == null ? null : Math.round(pv.confidence * 100);
+    return (
+      <span
+        className={`absolute top-[4px] right-[3px] h-[6px] w-[6px] rounded-full border ${styles.badge}`}
+        title={pct == null ? "Needs review" : `${pct}% confidence${pv.needsReview ? " – review required" : ""}`}
+      />
+    );
+  };
+
+  // Full text badge for wider columns in the charges block
+  const blockBadge = (keys: string[]) => {
+    const pv = presentationValueForKeys(data, keys);
+    if (pv.confidence == null && !pv.needsReview) return null;
+    const styles = FIELD_VISUAL_STYLES[pv.tone];
+    const pct = pv.confidence == null ? null : Math.round(pv.confidence * 100);
+    const text = pv.manualUpdated ? "Updated" : pct == null ? null : `${pct}%`;
+    if (text == null) return null;
+    return (
+      <span
+        className={`absolute top-[3px] right-[4px] rounded-[4px] border px-[4px] py-[1px] font-mono text-[7px] font-extrabold leading-none ${styles.badge}`}
+        title={pct == null ? "Needs review" : `${pct}% confidence${pv.needsReview ? " – review required" : ""}`}
+      >
+        {text}
+      </span>
+    );
+  };
 
   return (
     <main
@@ -4011,9 +4145,9 @@ function AwbFormInner({
           </div>
 
           {/* 1.1.4 -> fourth row left */}
-          {/* 1.1.4 â€” compact, labels inside boxes with 6px font */}
+          {/* 1.1.4 â€" compact, labels inside boxes with 6px font */}
           <div className="p-1 border-r min-h-0 flex flex-col gap-[4px] overflow-hidden">
-            {/* Block 1 â€” Airport of Departure */}
+            {/* Block 1 â€" Airport of Departure */}
             <div className="flex flex-col">
               <label className="text-[7px] font-bold leading-none">
                 Airport of Departure (Addr. of First Carrier and Requested
@@ -4026,11 +4160,11 @@ function AwbFormInner({
               />
             </div>
 
-            {/* Block 2 â€” 1:4:1:1:1:1 with smaller label font */}
+            {/* Block 2 â€" 1:4:1:1:1:1 with smaller label font */}
             <div className="grid grid-cols-[1fr_4fr_1fr_1fr_1fr_1fr] gap-[2px]">
-              {/* col 1 â€” to */}
+              {/* col 1 â€" to */}
               <div className="relative h-8 border border-black flex items-end overflow-hidden"></div>
-              {/* col 5 â€” to */}
+              {/* col 5 â€" to */}
               <div className="relative h-8 border border-black flex items-end overflow-hidden">
                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
                   to
@@ -4042,7 +4176,7 @@ function AwbFormInner({
                 />
               </div>
 
-              {/* col 6 â€” by */}
+              {/* col 6 â€" by */}
               <div className="relative h-8 border border-black flex items-end overflow-hidden">
                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
                   by
@@ -4055,9 +4189,9 @@ function AwbFormInner({
               </div>
             </div>
 
-            {/* Block 3 â€” bottom row */}
+            {/* Block 3 â€" bottom row */}
             <div className="grid grid-cols-2 gap-[6px]">
-              {/* left half â€” Airport of Destination */}
+              {/* left half â€" Airport of Destination */}
               <div className="relative h-8 border border-black flex items-end overflow-hidden">
                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
                   Airport of Destination
@@ -4069,7 +4203,7 @@ function AwbFormInner({
                 />
               </div>
 
-              {/* right half â€” Requested Flight/Date */}
+              {/* right half â€" Requested Flight/Date */}
               <div className="relative h-8 border border-black flex items-end overflow-hidden">
                 <span className="absolute top-[1px] left-[2px] bg-white px-[1px] text-[6px] font-bold leading-none">
                   Requested Flight/Date
@@ -4095,9 +4229,9 @@ function AwbFormInner({
           </div>
 
           {/* 1.2.4 -> fourth row right */}
-          {/* 1.2.4 â€” grid rows so total height always matches; Row 2 taller */}
+          {/* 1.2.4 â€" grid rows so total height always matches; Row 2 taller */}
           <div className="p-1 min-h-0 grid grid-rows-[1fr_1.4fr_1fr] gap-[2px] overflow-hidden">
-            {/* Row 1 â€” 1.3 : 1 : 1 */}
+            {/* Row 1 â€" 1.3 : 1 : 1 */}
             <div className="grid grid-cols-[1.3fr_2fr] gap-[2px] min-h-0">
               <div className="relative h-full border border-black flex flex-col justify-end min-w-0 px-1">
                 {/* heading/label */}
@@ -4130,7 +4264,7 @@ function AwbFormInner({
               </div>
             </div>
 
-            {/* Row 2 â€” 1.3 : 1 : 1 (taller via grid rows) */}
+            {/* Row 2 â€" 1.3 : 1 : 1 (taller via grid rows) */}
             <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-[2px] min-h-0">
               {/* LEFT SPLIT -> 4 cols (2 : 1.5 : 2.5 : 2.5) */}
               <div className="grid grid-cols-[2fr_1.5fr_2.5fr_2.5fr] gap-[2px] min-h-0 min-w-0">
@@ -4252,7 +4386,7 @@ function AwbFormInner({
               </div>
             </div>
 
-            {/* Row 3 â€” 1 : 2 */}
+            {/* Row 3 â€" 1 : 2 */}
             <div className="grid grid-cols-[1fr_2fr] gap-[2px] min-h-0">
               <div className="relative h-full border border-black flex items-end px-1 min-w-0">
                 <span className="absolute top-[1px] left-[2px] text-[6px] font-bold leading-none">
@@ -4326,22 +4460,23 @@ DE/SHP/CP/0049621759...  X`}
 
           {/* === BOTTOM BLOCK: Charges table with footer strip === */}
           <div className="flex-1 grid grid-rows-[1fr_18px]">
-            {/* TOP ROW (table body) */}
-            <div className="grid grid-cols-[1fr_2fr_0.5fr_2fr_2fr_2fr_3fr_6fr]">
-              {/* Col 1 â€” No. of Pieces */}
-              <div className="flex flex-col border-r border-black">
+            {/* TOP ROW (table body) — grid-cols must exactly match BOTTOM STRIP */}
+            <div className="grid grid-cols-[1fr_2fr_0.8fr_2fr_2fr_2fr_2.4fr_6fr]">
+              {/* Col 1 — No. of Pieces (narrow → compact dot badge) */}
+              <div className="relative flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
-                  No. of Pieces RCP
+                  No. of Pieces
                 </div>
                 <input
                   id="pieces"
                   className="flex-1 w-full text-center text-[11px] font-bold outline-none border-none p-[2px] placeholder-gray-400"
                   placeholder="1"
                 />
+                {blockDot(["pieces_value", "Pieces"])}
               </div>
 
-              {/* Col 2 â€” Gross Weight */}
-              <div className="flex flex-col border-r border-black">
+              {/* Col 2 — Gross Weight (narrow → compact dot badge) */}
+              <div className="relative flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Gross Weight
                 </div>
@@ -4350,10 +4485,11 @@ DE/SHP/CP/0049621759...  X`}
                   className="flex-1 w-full text-center text-[11px] font-bold outline-none border-none p-[2px] placeholder-gray-400 text-gray-400"
                   placeholder="12"
                 />
+                {blockDot(["gross_weight", "Gross weight"])}
               </div>
 
-              {/* Col 3 â€” KG / lb */}
-              <div className="flex flex-col border-r border-black">
+              {/* Col 3 — KG / lb (narrow → compact dot badge) */}
+              <div className="relative flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   KG / lb
                 </div>
@@ -4364,21 +4500,20 @@ DE/SHP/CP/0049621759...  X`}
                     placeholder="KG"
                   />
                 </div>
+                {blockDot(["weight_unit"])}
               </div>
 
-              {/* Col 4 â€” Rate Class (1 : 4 with Commodity Item No. split into 2 inputs) */}
+              {/* Col 4 — Rate Class (no extraction mapping → no badge) */}
               <div className="flex flex-col border-r border-black">
                 <div className="h-8 px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Rate Class
                 </div>
                 <div className="flex-1 grid grid-cols-[1fr_4fr] min-h-0">
-                  {/* left: rate class code */}
                   <input
                     id="rate-class-code"
                     className="border-r border-black w-full text-center text-[11px] font-bold outline-none border-none placeholder-gray-400 text-gray-400"
                     placeholder="M"
                   />
-                  {/* right: commodity item no. (top label + two inputs) */}
                   <div className="grid grid-rows-[16px_1fr] min-h-0 border-l border-black">
                     <div className="border-t border-b border-black px-[1px] text-[5px] leading-tight flex items-center justify-center text-center overflow-hidden">
                       Commodity Item No.
@@ -4393,8 +4528,8 @@ DE/SHP/CP/0049621759...  X`}
                 </div>
               </div>
 
-              {/* Col 5 â€” Chargeable Weight */}
-              <div className="flex flex-col border-r border-black">
+              {/* Col 5 — Chargeable Weight (wide → full text badge) */}
+              <div className="relative flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Chargeable Weight
                 </div>
@@ -4403,9 +4538,10 @@ DE/SHP/CP/0049621759...  X`}
                   className="flex-1 w-full text-center text-[11px] font-bold outline-none border-none p-[2px] placeholder-gray-400"
                   placeholder="15"
                 />
+                {blockBadge(["chargeable_weight", "Chargeable weight"])}
               </div>
 
-              {/* Col 6 â€” Rate / Charge */}
+              {/* Col 6 — Rate / Charge (no extraction mapping → no badge) */}
               <div className="flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Rate / Charge
@@ -4417,7 +4553,7 @@ DE/SHP/CP/0049621759...  X`}
                 />
               </div>
 
-              {/* Col 7 â€” Total */}
+              {/* Col 7 — Total (no extraction mapping → no badge) */}
               <div className="flex flex-col border-r border-black">
                 <div className="h-8 border-b border-black px-[1px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Total
@@ -4429,8 +4565,8 @@ DE/SHP/CP/0049621759...  X`}
                 />
               </div>
 
-              {/* Col 8 â€” Nature & Quantity of Goods */}
-              <div className="flex flex-col">
+              {/* Col 8 — Nature & Quantity of Goods (wide → full text badge) */}
+              <div className="relative flex flex-col">
                 <div className="h-8 border-b border-black px-[2px] text-[6px] font-bold leading-tight flex items-center justify-center text-center overflow-hidden">
                   Nature and Quantity of Goods (incl. Dimensions or Volume)
                 </div>
@@ -4446,11 +4582,12 @@ UN1845 DRY ICE
 HS Code: 29349900
 ECD: ART.137 UZK-DA`}
                 />
+                {blockBadge(["goods_description", "nature_quantity_goods", "Nature and Quantity of Goods"])}
               </div>
             </div>
 
-            {/* BOTTOM STRIP (small row across, inputs only in 1,2,7) */}
-            <div className="grid grid-cols-[1fr_2fr_0.5fr_2fr_2fr_2fr_3fr_6fr]">
+            {/* BOTTOM STRIP — must use identical grid-cols to TOP ROW above */}
+            <div className="grid grid-cols-[1fr_2fr_0.8fr_2fr_2fr_2fr_2.4fr_6fr]">
               <div className="border-t border-r border-black">
                 <input
                   id="pieces_value_total"
@@ -4482,8 +4619,8 @@ ECD: ART.137 UZK-DA`}
         </div>
 
         {/* SECTION 3 (30% height) */}
-        {/* SECTION 3 â€” fills remaining space exactly */}
-        {/* SECTION 3 â€” exactly 3 rows, each 2 cols (1 : 1.5) */}
+        {/* SECTION 3 â€" fills remaining space exactly */}
+        {/* SECTION 3 â€" exactly 3 rows, each 2 cols (1 : 1.5) */}
         <div className="flex-1 min-h-0 border-b border-black grid grid-rows-3">
           {/* ===== Row 1 ===== */}
           <div className="grid grid-cols-[1fr_1.5fr] border-b border-black min-h-0">
@@ -4839,7 +4976,7 @@ RA-Dangerous Goods Fee C 60.00`}
             <div className="grid grid-rows-[2fr_1fr] min-h-0">
               {/* Row 1: now with a top bar + two stacked sub-rows */}
               <div className="grid grid-rows-[auto_1fr_auto] border-b border-black min-h-0">
-                {/* NEW top row â€” Print Time */}
+                {/* NEW top row â€" Print Time */}
                 <div className="flex items-center px-2 py-1 gap-2 text-[9px] font-bold">
                   <label className="shrink-0">Print Time:</label>
                   <input
@@ -4850,7 +4987,7 @@ RA-Dangerous Goods Fee C 60.00`}
                   />
                 </div>
 
-                {/* Middle row â€” three fields with dotted lines */}
+                {/* Middle row â€" three fields with dotted lines */}
                 <div className="grid grid-cols-3 gap-2 items-end px-2">
                   {/* Executed on (Date) */}
                   <div className="flex flex-col items-center">
@@ -4886,7 +5023,7 @@ RA-Dangerous Goods Fee C 60.00`}
                   </div>
                 </div>
 
-                {/* Bottom row â€” captions */}
+                {/* Bottom row â€" captions */}
                 <div className="grid grid-cols-3 text-[7px] text-center leading-tight px-2 pb-1">
                   <div>Executed on (Date)</div>
                   <div>at (Place)</div>
@@ -4896,7 +5033,7 @@ RA-Dangerous Goods Fee C 60.00`}
 
               {/* ===== Row 2 ===== */}
               <div className="grid grid-cols-[1fr_2fr] border-b border-black min-h-0">
-                {/* LEFT â€” compact header/body with borders */}
+                {/* LEFT â€" compact header/body with borders */}
                 <div className="border-r border-black grid grid-rows-[12px_1fr] min-h-0">
                   {/* header (shorter height) */}
                   <div className="border-b border-black flex items-center justify-center text-[6px] font-bold leading-none">

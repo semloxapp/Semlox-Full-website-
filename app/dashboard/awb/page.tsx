@@ -23,14 +23,10 @@ import {
   Filter,
   Home,
   LogOut,
-  Maximize,
-  RotateCw,
   Save,
   Search,
   Settings,
   Upload,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import type { AwbExtractedField, AwbExtractionResponse } from "@/lib/awb/types";
 import type {
@@ -40,6 +36,7 @@ import type {
 } from "pdfjs-dist";
 import AwbPaperContent, {
   getAwbReviewPresentationStats,
+  ModernAwbPaper,
 } from "./components/AwbPaperContent";
 
 type AwbPhase = "upload" | "processing" | "review";
@@ -107,7 +104,9 @@ function awbPayloadFromExtraction(extraction: AwbExtractionResponse) {
     issued_by: values.issuing_carrier,
     flight_date: values.flight_date,
     pieces_value: values.pieces,
+    pieces_line: values.pieces_line,
     gross_weight: values.gross_weight,
+    weight_line: values.weight_line,
     chargeable_weight: values.chargeable_weight,
     weight_unit: values.weight_unit,
     handling_info: values.handling_information,
@@ -157,7 +156,9 @@ const PAPER_PAYLOAD_TO_FIELD_KEY: Record<string, string> = {
   issued_by: "issuing_carrier",
   flight_date: "flight_date",
   pieces_value: "pieces",
+  pieces_line: "pieces_line",
   gross_weight: "gross_weight",
+  weight_line: "weight_line",
   chargeable_weight: "chargeable_weight",
   weight_unit: "weight_unit",
   handling_info: "handling_information",
@@ -326,8 +327,8 @@ function ProcessingView({
   onChooseAnother: () => void;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden bg-[radial-gradient(circle_at_35%_35%,rgba(59,130,246,0.08),transparent_32%),linear-gradient(90deg,#20242d_0%,#20242d_42%,#070b17_52%,#050813_100%)] px-5">
-      <div className="flex w-full max-w-[560px] items-center rounded-[9px] border border-white/[0.08] bg-[#070b17]/80 px-4 py-3 text-[10px] font-bold text-white">
+    <div className="awb-processing-view flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden bg-[radial-gradient(circle_at_35%_35%,rgba(59,130,246,0.08),transparent_32%),linear-gradient(90deg,#20242d_0%,#20242d_42%,#070b17_52%,#050813_100%)] px-5">
+      <div className="awb-processing-stepper flex w-full max-w-[560px] items-center rounded-[9px] border border-white/[0.08] bg-[#070b17]/80 px-4 py-3 text-[10px] font-bold text-white">
         <div className="flex items-center gap-2">
           <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500">
             <CheckCircle2 className="h-3 w-3" />
@@ -341,41 +342,41 @@ function ProcessingView({
           </span>
           AI Extract
         </div>
-        <div className="mx-3 h-px flex-1 bg-white/[0.10]" />
-        <div className="flex items-center gap-2 text-[#64748b]">
-          <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/10">
+        <div className="awb-processing-muted-line mx-3 h-px flex-1 bg-white/[0.10]" />
+        <div className="awb-processing-muted-step flex items-center gap-2 text-[#64748b]">
+          <span className="awb-processing-muted-badge flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/10">
             03
           </span>
           Review Fields
         </div>
       </div>
-      <div className="relative flex min-h-[220px] w-full max-w-[340px] flex-col items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.035] px-[26px] py-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md">
+      <div className="awb-processing-card relative flex min-h-[220px] w-full max-w-[340px] flex-col items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.035] px-[26px] py-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md">
         {error ? (
           <CircleAlert className="mb-4 h-[46px] w-[46px] text-red-400" />
         ) : (
-          <div className="mb-[18px] h-[46px] w-[46px] animate-spin rounded-full border-2 border-[#334155] border-t-[#2f80ff]" />
+          <div className="awb-processing-spinner mb-[18px] h-[46px] w-[46px] animate-spin rounded-full border-2 border-[#334155] border-t-[#2f80ff]" />
         )}
 
-        <h2 className="text-[13px] font-extrabold leading-none text-[#f8fafc]">
+        <h2 className="awb-processing-title text-[13px] font-extrabold leading-none text-[#f8fafc]">
           {error ? "Extraction could not be completed" : `Processing ${fileName}`}
         </h2>
 
-        <p className="mt-2 max-w-[250px] text-[9px] leading-[1.4] text-[#64748b]">
+        <p className="awb-processing-subtitle mt-2 max-w-[250px] text-[9px] leading-[1.4] text-[#64748b]">
           {error || "Extracting AWB fields..."}
         </p>
 
         {error ? (
-          <div className="mt-5 flex gap-2">
-            <button type="button" onClick={onChooseAnother} className="h-8 rounded-[7px] border border-white/10 bg-white/[0.04] px-3 text-[10px] font-semibold text-[#94a3b8]">
+          <div className="mt-5 flex w-full gap-2">
+            <button type="button" onClick={onChooseAnother} className="awb-processing-secondary-action flex h-10 flex-1 items-center justify-center whitespace-nowrap rounded-[7px] border border-white/10 bg-white/[0.04] px-3 text-[11px] font-semibold leading-none text-[#94a3b8]">
               Choose another
             </button>
-            <button type="button" onClick={onRetry} className="h-8 rounded-[7px] bg-[#2f80ff] px-4 text-[10px] font-bold text-white">
+            <button type="button" onClick={onRetry} className="flex h-10 flex-1 items-center justify-center whitespace-nowrap rounded-[7px] bg-[#2f80ff] px-3 text-[11px] font-bold leading-none text-white">
               Retry extraction
             </button>
           </div>
         ) : (
           <>
-            <div className="mt-[13px] h-[2px] w-full overflow-hidden bg-[#1e293b]">
+            <div className="awb-processing-track mt-[13px] h-[2px] w-full overflow-hidden bg-[#1e293b]">
               <div className="h-full w-[72%] animate-pulse bg-gradient-to-r from-[#2f80ff] to-[#00d9ff]" />
             </div>
             <div className="mt-[13px] font-mono text-[9px] text-[#00d9ff]">
@@ -389,211 +390,98 @@ function ProcessingView({
 }
 
 function AwbDocumentPreview({
-  fileName,
   data,
-  pages,
   onSaveDraft,
   onExportFinalPdf,
   onPaperFieldChange,
   savingDraft,
   exportingPdf,
   readOnly,
+  magnifierActive,
 }: {
-  fileName: string;
   data: Record<string, unknown>;
-  pages: number;
   onSaveDraft: () => void;
   onExportFinalPdf: () => void;
   onPaperFieldChange: (payloadKey: string, value: string) => void;
   savingDraft: boolean;
   exportingPdf: boolean;
   readOnly: boolean;
+  magnifierActive: boolean;
 }) {
-  const PAPER_WIDTH = 760;
-  const PAPER_HEIGHT = PAPER_WIDTH * (297 / 210);
-  const pageCount = Math.max(1, pages);
-  const [page, setPage] = useState(1);
-  const [zoom, setZoom] = useState(100);
-  const [fitPreview, setFitPreview] = useState(true);
-  const [magnifierActive, setMagnifierActive] = useState(false);
-  const [rotation, setRotation] = useState(0);
-  const [enhanced, setEnhanced] = useState(false);
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const paperRef = useRef<HTMLDivElement | null>(null);
-  const [viewerWidth, setViewerWidth] = useState(620);
+  const [magnifierLensVisible, setMagnifierLensVisible] = useState(false);
   const [lensPosition, setLensPosition] = useState({
-    left: 290,
-    top: 110,
-    contentX: 250,
-    contentY: 90,
+    left: 0, top: 0, contentX: 0, contentY: 0, paperWidth: 0,
   });
-  const availablePaperWidth = Math.max(320, viewerWidth - 32);
-  const fitScale = fitPreview
-    ? Math.min(1, availablePaperWidth / PAPER_WIDTH)
-    : 1;
-  const zoomScale = fitScale * (zoom / 100);
-  const scaledPaperWidth = PAPER_WIDTH * zoomScale;
-  const scaledPaperHeight = PAPER_HEIGHT * zoomScale;
-  const reviewStats = getAwbReviewPresentationStats(data);
 
+  // After data loads, auto-resize textareas for browsers without field-sizing: content support
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-    const updateWidth = () => setViewerWidth(viewer.clientWidth);
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(viewer);
-    return () => observer.disconnect();
-  }, []);
+    const id = setTimeout(() => {
+      viewerRef.current?.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((ta) => {
+        ta.style.height = "auto";
+        ta.style.height = `${ta.scrollHeight}px`;
+      });
+    }, 80);
+    return () => clearTimeout(id);
+  }, [data]);
 
   const moveLens = (event: PointerEvent<HTMLDivElement>) => {
-    const container = event.currentTarget;
-    const containerRect = container.getBoundingClientRect();
-    const paperRect = paperRef.current?.getBoundingClientRect();
-    if (!paperRect) return;
-
-    const left = event.clientX - containerRect.left + container.scrollLeft;
-    const top = event.clientY - containerRect.top + container.scrollTop;
-    const contentX =
-      Math.min(paperRect.width, Math.max(0, event.clientX - paperRect.left)) /
-      zoomScale;
-    const contentY =
-      Math.min(paperRect.height, Math.max(0, event.clientY - paperRect.top)) /
-      zoomScale;
-
+    if (!magnifierActive || !paperRef.current) return;
+    const paperRect = paperRef.current.getBoundingClientRect();
     setLensPosition({
-      left,
-      top,
-      contentX,
-      contentY,
+      left: event.clientX,
+      top: event.clientY,
+      contentX: Math.max(0, Math.min(paperRect.width, event.clientX - paperRect.left)),
+      contentY: Math.max(0, Math.min(paperRect.height, event.clientY - paperRect.top)),
+      paperWidth: paperRect.width,
     });
+    if (!magnifierLensVisible) setMagnifierLensVisible(true);
   };
 
   return (
-    <div className={`awb-document-preview flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-[#0a0e1a] ${readOnly ? "awb-preview-readonly" : ""}`}>
-      <div className="awb-preview-toolbar flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#111726] px-3 py-2">
-        <FileText className="h-3.5 w-3.5 text-[#ff4d5d]" />
-        <span className="max-w-[150px] truncate font-mono text-[10px] font-bold text-white sm:max-w-[190px]">
-          {fileName}
-        </span>
-        <span className="shrink-0 font-mono text-[9px] text-[#64748b]">
-          {pageCount} {pageCount === 1 ? "page" : "pages"}
-        </span>
-        <div className="ml-auto flex max-w-full items-center gap-2 overflow-x-auto font-mono text-[10px] text-white">
-          <button onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-6 w-6 rounded border border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white">&lsaquo;</button>
-          <span className="rounded border border-white/10 bg-white/[0.05] px-3 py-1">{page}</span>
-          <span className="text-[#64748b]">/ {pageCount}</span>
-          <button onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="h-6 w-6 rounded border border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white">&rsaquo;</button>
-          <button onClick={() => setZoom((current) => Math.max(75, current - 10))} className="ml-3 flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white">
-            <ZoomOut className="h-3 w-3" />
-          </button>
-          <span className="min-w-9 text-center font-extrabold">{zoom}%</span>
-          <button onClick={() => setZoom((current) => Math.min(140, current + 10))} className="flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white">
-            <ZoomIn className="h-3 w-3" />
-          </button>
-          <button onClick={() => setFitPreview((current) => !current)} className={`flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border text-[#64748b] hover:text-white ${fitPreview ? "border-[#2f80ff]/50 bg-[#2f80ff]/15" : "border-white/10 bg-white/[0.04]"}`}>
-            <Maximize className="h-3 w-3" />
-          </button>
-          <button onClick={() => setMagnifierActive((current) => !current)} className={`ml-1 flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border ${magnifierActive ? "border-[#2f80ff]/50 bg-[#2f80ff]/15 text-[#60a5fa]" : "border-white/10 bg-white/[0.04] text-[#64748b]"}`}>
-            <Search className="h-3 w-3" />
-          </button>
-          <button onClick={() => setRotation((current) => (current + 90) % 360)} className={`flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border text-[#64748b] hover:text-white ${rotation ? "border-[#2f80ff]/50 bg-[#2f80ff]/15" : "border-white/10 bg-white/[0.04]"}`}>
-            <RotateCw className="h-3 w-3" />
-          </button>
-          <button onClick={() => setEnhanced((current) => !current)} className={`ml-1 flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border text-[#64748b] hover:text-white ${enhanced ? "border-[#2f80ff]/50 bg-[#2f80ff]/15" : "border-white/10 bg-white/[0.04]"}`}>
-            <Filter className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-
-      <div className="awb-preview-review-summary flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#0d1321] px-3 py-2">
-        <div className="mr-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[#64748b]">
-          Review summary
-        </div>
-        <div className="awb-preview-status-chip awb-preview-status-chip-extracted flex items-center gap-1.5 rounded-[6px] border border-emerald-400/35 bg-emerald-400/[0.12] px-2.5 py-1 text-[9px] font-medium text-emerald-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-          Extracted
-          <strong className="font-mono text-[10px] text-emerald-100">
-            {reviewStats.extracted}
-          </strong>
-        </div>
-        <div className="awb-preview-status-chip awb-preview-status-chip-review flex items-center gap-1.5 rounded-[6px] border border-amber-400/35 bg-amber-400/[0.12] px-2.5 py-1 text-[9px] font-medium text-amber-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-          Review
-          <strong className="font-mono text-[10px] text-amber-100">
-            {reviewStats.review}
-          </strong>
-        </div>
-        <div className="awb-preview-status-chip awb-preview-status-chip-empty flex items-center gap-1.5 rounded-[6px] border border-slate-400/25 bg-slate-400/[0.1] px-2.5 py-1 text-[9px] font-medium text-slate-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          Empty
-          <strong className="font-mono text-[10px] text-slate-100">
-            {reviewStats.empty}
-          </strong>
-        </div>
-        <div className="awb-preview-status-chip awb-preview-status-chip-confidence ml-auto flex items-center gap-1.5 rounded-[6px] border border-[#2f80ff]/40 bg-[#2f80ff]/15 px-2.5 py-1 text-[9px] font-medium text-blue-200">
-          AI Conf
-          <strong className="font-mono text-[10px] text-blue-100">
-            {reviewStats.averageConfidence == null
-              ? "--"
-              : `${reviewStats.averageConfidence}%`}
-          </strong>
-        </div>
-      </div>
-
+    <div className={`awb-document-preview flex min-h-full flex-col overflow-hidden bg-transparent ${readOnly ? "awb-preview-readonly" : ""}`}>
       <div
         ref={viewerRef}
+        className="awb-document-scroll flex-1 overflow-visible bg-transparent p-0"
         onPointerMove={moveLens}
-        className="awb-document-scroll relative min-h-0 flex-1 overflow-auto bg-[#1b2232] px-4 py-5"
+        onPointerLeave={() => setMagnifierLensVisible(false)}
       >
+        <div ref={paperRef} className="w-full overflow-visible bg-white font-mono text-[#0f172a]">
+          <AwbPaperContent
+            data={data}
+            onSaveDraft={onSaveDraft}
+            onExportFinalPdf={onExportFinalPdf}
+            onFieldChange={onPaperFieldChange}
+            savingDraft={savingDraft}
+            exportingPdf={exportingPdf}
+            showActions={false}
+          />
+        </div>
+      </div>
+
+      {magnifierActive && magnifierLensVisible ? (
         <div
-          className="relative mx-auto"
-          style={{
-            width: `${scaledPaperWidth}px`,
-            height: `${scaledPaperHeight}px`,
-          }}
+          className="pointer-events-none fixed z-50 h-[145px] w-[145px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-2 border-[#3b82f6] shadow-[0_4px_20px_rgba(0,0,0,0.5)] [clip-path:circle(50%_at_50%_50%)]"
+          style={{ left: lensPosition.left, top: lensPosition.top }}
         >
           <div
-            ref={paperRef}
-            className={`absolute left-0 top-0 w-[760px] overflow-hidden rounded-[3px] bg-white font-mono text-[#0f172a] shadow-[0_22px_55px_rgba(0,0,0,0.45)] ring-1 ring-black/80 transition-transform duration-200 ${enhanced ? "contrast-125 saturate-125" : ""}`}
+            className="pointer-events-none absolute bg-white"
             style={{
-              transform: `scale(${zoomScale}) rotate(${rotation}deg)`,
+              width: Math.max(1, lensPosition.paperWidth),
+              transform: "scale(2)",
               transformOrigin: "top left",
+              left: 72.5 - lensPosition.contentX * 2,
+              top: 72.5 - lensPosition.contentY * 2,
             }}
           >
-            <AwbPaperContent
-              data={data}
-              onSaveDraft={onSaveDraft}
-              onExportFinalPdf={onExportFinalPdf}
-              onFieldChange={onPaperFieldChange}
-              savingDraft={savingDraft}
-              exportingPdf={exportingPdf}
-              showActions={false}
-            />
+            <ModernAwbPaper data={data} />
           </div>
+          <div className="absolute inset-x-0 top-1/2 h-px bg-[#3b82f6]/60" />
+          <div className="absolute inset-y-0 left-1/2 w-px bg-[#3b82f6]/30" />
+          <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#3b82f6]/70" />
         </div>
-        {magnifierActive && (
-          <div
-            className="pointer-events-none absolute z-20 flex h-[145px] w-[145px] -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-2 border-[#3b82f6] bg-white text-[#0f172a] shadow-[0_18px_45px_rgba(0,0,0,0.45),inset_0_0_0_1px_rgba(59,130,246,0.18)] [clip-path:circle(50%_at_50%_50%)]"
-            style={{ left: `${lensPosition.left}px`, top: `${lensPosition.top}px` }}
-          >
-            <div className="absolute inset-x-0 top-1/2 h-px bg-[#3b82f6]/60" />
-            <div className="absolute inset-y-0 left-1/2 w-px bg-[#3b82f6]/30" />
-            <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#3b82f6]/70" />
-            <div
-              className="absolute w-[760px] bg-white font-mono text-[#0f172a] will-change-transform"
-              style={{
-                left: `calc(50% - ${lensPosition.contentX * 2}px)`,
-                top: `calc(50% - ${lensPosition.contentY * 2}px)`,
-                transform: "scale(2)",
-                transformOrigin: "top left",
-              }}
-            >
-              <AwbPaperContent data={data} showActions={false} />
-            </div>
-          </div>
-        )}
-      </div>
+      ) : null}
 
       <div className="awb-preview-actions flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-white/[0.08] bg-[#0d1321] px-3 py-3">
         <button
@@ -617,24 +505,16 @@ function AwbDocumentPreview({
       </div>
 
       <style jsx global>{`
-        .awb-document-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: #64748b #111827;
+        .awb-document-scroll,
+        .awb-source-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
 
-        .awb-document-scroll::-webkit-scrollbar {
-          width: 9px;
+        .awb-document-scroll::-webkit-scrollbar,
+        .awb-source-scroll::-webkit-scrollbar {
+          width: 0;
           height: 0;
-        }
-
-        .awb-document-scroll::-webkit-scrollbar-track {
-          background: #111827;
-        }
-
-        .awb-document-scroll::-webkit-scrollbar-thumb {
-          background: #64748b;
-          border: 2px solid #111827;
-          border-radius: 999px;
         }
 
         .awb-document-scroll textarea,
@@ -654,6 +534,9 @@ function AwbDocumentPreview({
         .awb-document-scroll .awb-form select {
           background: transparent;
           color: #020617;
+          font-size: 10px !important;
+          font-weight: 500 !important;
+          line-height: 1.18 !important;
           vertical-align: middle;
         }
 
@@ -691,13 +574,17 @@ function AwbDocumentPreview({
 
         .awb-document-scroll .awb-form input {
           overflow: hidden;
-          text-overflow: ellipsis;
+          text-overflow: clip;
         }
 
         .awb-document-scroll .awb-form .awb-modern-paper textarea {
-          overflow: auto;
+          flex: none;
+          field-sizing: content;
+          min-height: 26px;
+          overflow: hidden;
           white-space: pre-wrap;
           overflow-wrap: anywhere;
+          word-break: break-word;
         }
 
         .awb-document-scroll .awb-form .awb-modern-paper input:disabled::placeholder,
@@ -844,22 +731,20 @@ function UploadedPdfPanel({
   sourceStored?: boolean;
 }) {
   const isPdf = fileName.toLowerCase().endsWith(".pdf");
-  const [magnifierActive, setMagnifierActive] = useState(false);
-  const [lensVisible, setLensVisible] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(1);
-  const [zoom, setZoom] = useState(100);
   const [previewLoading, setPreviewLoading] = useState(Boolean(pdfUrl));
   const [previewError, setPreviewError] = useState("");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [sourceMagnifierActive, setSourceMagnifierActive] = useState(true);
+  const [sourceLensVisible, setSourceLensVisible] = useState(false);
+  const [sourceLensPosition, setSourceLensPosition] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lensCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<RenderTask | null>(null);
   const renderGenerationRef = useRef(0);
-  const [lensPosition, setLensPosition] = useState({
-    left: 0,
-    top: 0,
-  });
+  const sourceLensSize = 145;
+  const sourceLensZoom = 2;
 
   useEffect(() => {
     if (!pdfUrl || !isPdf) return;
@@ -926,8 +811,7 @@ function UploadedPdfPanel({
       if (cancelled || generation !== renderGenerationRef.current) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const displayScale = 1.25 * (zoom / 100);
-        const displayViewport = page.getViewport({ scale: displayScale });
+        const displayScale = 1.5;
         const devicePixelRatio = Math.max(1, window.devicePixelRatio || 1);
         const qualityScale = Math.min(3, Math.max(2, devicePixelRatio * 2));
         const renderViewport = page.getViewport({
@@ -938,8 +822,6 @@ function UploadedPdfPanel({
 
         canvas.width = Math.ceil(renderViewport.width);
         canvas.height = Math.ceil(renderViewport.height);
-        canvas.style.width = `${Math.floor(displayViewport.width)}px`;
-        canvas.style.height = `${Math.floor(displayViewport.height)}px`;
 
         const renderTask = page.render({
           canvas,
@@ -980,7 +862,7 @@ function UploadedPdfPanel({
       cancelled = true;
       renderTaskRef.current?.cancel();
     };
-  }, [isPdf, pageNumber, pdfDocument, zoom]);
+  }, [isPdf, pageNumber, pdfDocument]);
 
   useEffect(() => {
     if (!pdfUrl || isPdf) return;
@@ -997,11 +879,8 @@ function UploadedPdfPanel({
       const canvas = canvasRef.current;
       const context = canvas?.getContext("2d");
       if (!canvas || !context) return;
-      const scale = zoom / 100;
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
-      canvas.style.width = `${Math.floor(image.naturalWidth * scale)}px`;
-      canvas.style.height = `${Math.floor(image.naturalHeight * scale)}px`;
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0);
       setPageCount(1);
@@ -1019,104 +898,107 @@ function UploadedPdfPanel({
       cancelled = true;
       image.src = "";
     };
-  }, [isPdf, pdfUrl, zoom]);
+  }, [isPdf, pdfUrl]);
 
-  const moveLens = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!magnifierActive) return;
-    const canvas = canvasRef.current;
+  const moveSourceLens = (event: PointerEvent<HTMLCanvasElement>) => {
+    const sourceCanvas = canvasRef.current;
     const lensCanvas = lensCanvasRef.current;
-    if (!canvas || !lensCanvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
-      setLensVisible(false);
+    if (
+      !sourceMagnifierActive ||
+      !sourceCanvas ||
+      !lensCanvas ||
+      previewLoading ||
+      previewError
+    ) {
+      setSourceLensVisible(false);
       return;
     }
 
-    const lensSize = 145;
-    const magnification = 2;
-    const pixelRatioX = canvas.width / rect.width;
-    const pixelRatioY = canvas.height / rect.height;
-    const sourceWidth = (lensSize / magnification) * pixelRatioX;
-    const sourceHeight = (lensSize / magnification) * pixelRatioY;
-    const sourceX = x * pixelRatioX - sourceWidth / 2;
-    const sourceY = y * pixelRatioY - sourceHeight / 2;
-    const devicePixelRatio = Math.max(1, window.devicePixelRatio || 1);
-    const outputRatio = Math.min(3, Math.max(2, devicePixelRatio * 2));
-    const lensContext = lensCanvas.getContext("2d");
-    if (!lensContext) return;
+    const rect = sourceCanvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+      setSourceLensVisible(false);
+      return;
+    }
 
-    lensCanvas.width = Math.floor(lensSize * outputRatio);
-    lensCanvas.height = Math.floor(lensSize * outputRatio);
-    lensCanvas.style.width = `${lensSize}px`;
-    lensCanvas.style.height = `${lensSize}px`;
-    lensContext.clearRect(0, 0, lensCanvas.width, lensCanvas.height);
-    lensContext.drawImage(
-      canvas,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
+    const context = lensCanvas.getContext("2d");
+    if (!context || !sourceCanvas.width || !sourceCanvas.height) {
+      setSourceLensVisible(false);
+      return;
+    }
+
+    const devicePixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    lensCanvas.width = Math.round(sourceLensSize * devicePixelRatio);
+    lensCanvas.height = Math.round(sourceLensSize * devicePixelRatio);
+    lensCanvas.style.width = `${sourceLensSize}px`;
+    lensCanvas.style.height = `${sourceLensSize}px`;
+
+    const scaleX = sourceCanvas.width / rect.width;
+    const scaleY = sourceCanvas.height / rect.height;
+    const sourceX = x * scaleX;
+    const sourceY = y * scaleY;
+    const sampleWidth = Math.min(
+      sourceCanvas.width,
+      (sourceLensSize / sourceLensZoom) * scaleX
+    );
+    const sampleHeight = Math.min(
+      sourceCanvas.height,
+      (sourceLensSize / sourceLensZoom) * scaleY
+    );
+    const sampleX = Math.max(
+      0,
+      Math.min(sourceCanvas.width - sampleWidth, sourceX - sampleWidth / 2)
+    );
+    const sampleY = Math.max(
+      0,
+      Math.min(sourceCanvas.height - sampleHeight, sourceY - sampleHeight / 2)
+    );
+
+    context.clearRect(0, 0, lensCanvas.width, lensCanvas.height);
+    context.drawImage(
+      sourceCanvas,
+      sampleX,
+      sampleY,
+      sampleWidth,
+      sampleHeight,
       0,
       0,
       lensCanvas.width,
       lensCanvas.height
     );
-    setLensPosition({ left: x, top: y });
-    setLensVisible(true);
+
+    setSourceLensPosition({ x, y });
+    setSourceLensVisible(true);
   };
 
   return (
-    <div className="awb-uploaded-pdf-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.03]">
-      <div className="flex h-10 shrink-0 items-center border-b border-white/[0.08] px-3">
-        <div className="text-[12px] font-extrabold">Source Document</div>
+    <div className="awb-uploaded-pdf-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[12px] border border-white/[0.08] bg-white/[0.03]">
+      <div className="awb-source-toolbar flex min-h-[58px] shrink-0 items-center border-b border-white/[0.08] px-3 py-0">
+        <div className="text-[11px] font-bold">Source Document</div>
         <span className="ml-2 min-w-0 truncate font-mono text-[9px] text-[#64748b]">
           {fileName}
         </span>
-        {pdfUrl ? (
-          <div className="ml-auto flex items-center gap-1.5 font-mono text-[9px] text-[#94a3b8]">
-            {isPdf ? (
-              <>
-                <button
-                  type="button"
-                  title="Previous page"
-                  disabled={pageNumber <= 1 || previewLoading}
-                  onClick={() => setPageNumber((current) => Math.max(1, current - 1))}
-                  className="flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
-                >
-                  &lsaquo;
-                </button>
-                <span className="min-w-[40px] text-center">{pageNumber}/{pageCount}</span>
-                <button
-                  type="button"
-                  title="Next page"
-                  disabled={pageNumber >= pageCount || previewLoading}
-                  onClick={() => setPageNumber((current) => Math.min(pageCount, current + 1))}
-                  className="flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
-                >
-                  &rsaquo;
-                </button>
-              </>
-            ) : null}
+        {isPdf && pageCount > 1 ? (
+          <div className="ml-auto flex items-center gap-1 font-mono text-[9px] text-[#94a3b8]">
             <button
               type="button"
-              title="Zoom out"
-              disabled={zoom <= 75 || previewLoading}
-              onClick={() => setZoom((current) => Math.max(75, current - 25))}
-              className="flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
+              title="Previous page"
+              disabled={pageNumber <= 1 || previewLoading}
+              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+              className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
             >
-              <ZoomOut className="h-3 w-3" />
+              &lsaquo;
             </button>
-            <span className="min-w-[34px] text-center">{zoom}%</span>
+            <span className="min-w-[36px] text-center">{pageNumber}/{pageCount}</span>
             <button
               type="button"
-              title="Zoom in"
-              disabled={zoom >= 200 || previewLoading}
-              onClick={() => setZoom((current) => Math.min(200, current + 25))}
-              className="flex h-[25px] w-[25px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
+              title="Next page"
+              disabled={pageNumber >= pageCount || previewLoading}
+              onClick={() => setPageNumber((p) => Math.min(pageCount, p + 1))}
+              className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.04] hover:text-white disabled:opacity-40"
             >
-              <ZoomIn className="h-3 w-3" />
+              &rsaquo;
             </button>
           </div>
         ) : null}
@@ -1124,57 +1006,50 @@ function UploadedPdfPanel({
           type="button"
           title="Magnifier"
           aria-label="Magnifier"
-          aria-pressed={magnifierActive}
-          disabled={!pdfUrl}
+          aria-pressed={sourceMagnifierActive}
           onClick={() => {
-            setMagnifierActive((current) => !current);
-            setLensVisible(false);
+            setSourceMagnifierActive((current) => !current);
+            setSourceLensVisible(false);
           }}
-          className={`flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-[5px] border transition disabled:cursor-not-allowed disabled:opacity-40 ${
-            magnifierActive
+          className={`${isPdf && pageCount > 1 ? "ml-2" : "ml-auto"} flex h-[30px] w-[30px] items-center justify-center rounded-[6px] border transition ${
+            sourceMagnifierActive
               ? "border-[#2f80ff]/50 bg-[#2f80ff]/15 text-[#60a5fa]"
               : "border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white"
           }`}
         >
-          <Search className="h-3 w-3" />
+          <Search className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto bg-[#171d2d] p-3">
+      <div className="awb-source-scroll min-h-0 flex-1 overflow-visible bg-transparent p-0">
         {pdfUrl ? (
-          <div className="relative min-h-[520px] min-w-full">
-            <div className="relative mx-auto w-fit">
+          <div className="relative min-h-[400px] w-full">
+            <canvas
+              ref={canvasRef}
+              className="block h-auto w-full bg-white"
+              onPointerMove={moveSourceLens}
+              onPointerLeave={() => setSourceLensVisible(false)}
+            />
+            {sourceMagnifierActive ? (
               <canvas
-                ref={canvasRef}
-                onPointerMove={moveLens}
-                onPointerLeave={() => setLensVisible(false)}
-                className="block max-w-none bg-white shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
+                ref={lensCanvasRef}
+                className="pointer-events-none absolute z-30 rounded-full border-2 border-[#3b82f6] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.5)] [clip-path:circle(50%_at_50%_50%)]"
+                style={{
+                  left: sourceLensPosition.x - sourceLensSize / 2,
+                  top: sourceLensPosition.y - sourceLensSize / 2,
+                  opacity: sourceLensVisible ? 1 : 0,
+                  width: sourceLensSize,
+                  height: sourceLensSize,
+                }}
               />
-              {magnifierActive ? (
-                <div
-                  className={`pointer-events-none absolute z-20 h-[145px] w-[145px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-2 border-[#3b82f6] bg-white shadow-[0_18px_45px_rgba(0,0,0,0.45),inset_0_0_0_1px_rgba(59,130,246,0.18)] transition-opacity duration-75 [clip-path:circle(50%_at_50%_50%)] ${
-                    lensVisible ? "visible opacity-100" : "invisible opacity-0"
-                  }`}
-                  style={{ left: `${lensPosition.left}px`, top: `${lensPosition.top}px` }}
-                >
-                  <canvas
-                    ref={lensCanvasRef}
-                    aria-hidden="true"
-                    className="h-[145px] w-[145px]"
-                  />
-                  <div className="absolute inset-x-0 top-1/2 h-px bg-[#3b82f6]/60" />
-                  <div className="absolute inset-y-0 left-1/2 w-px bg-[#3b82f6]/30" />
-                  <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#3b82f6]/70" />
-                </div>
-              ) : null}
-            </div>
+            ) : null}
             {previewLoading ? (
-              <div className="absolute inset-0 flex min-h-[520px] items-center justify-center bg-[#171d2d] text-[11px] text-[#94a3b8]">
+              <div className="absolute inset-0 flex min-h-[400px] items-center justify-center bg-[#171d2d] text-[11px] text-[#94a3b8]">
                 Rendering source preview...
               </div>
             ) : null}
             {previewError ? (
-              <div className="absolute inset-0 flex min-h-[520px] items-center justify-center bg-[#171d2d] px-6 text-center text-[11px] text-red-300">
+              <div className="absolute inset-0 flex min-h-[400px] items-center justify-center bg-[#171d2d] px-6 text-center text-[11px] text-red-300">
                 {previewError}
               </div>
             ) : null}
@@ -1238,56 +1113,8 @@ function ExtractedFieldsPanel({
   manuallyReviewedKeys: Set<string>;
   readOnly?: boolean;
 }) {
-  type FieldFilter = "all" | "review" | "warning" | "valid" | "reviewed" | "missing";
-  const [filter, setFilter] = useState<FieldFilter>("all");
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
-  const [pinnedFieldKeys, setPinnedFieldKeys] = useState<Set<string>>(() => new Set());
-  const fieldTone = (field: AwbExtractedField) => {
-    if (
-      field.value.trim() &&
-      (manuallyReviewedKeys.has(field.key) || field.color === "blue")
-    ) {
-      return "blue";
-    }
-    if (
-      field.needsReview ||
-      field.status === "review" ||
-      field.status === "missing" ||
-      field.confidence < 0.85
-    ) {
-      return "red";
-    }
-    if (field.status === "warning" || field.confidence < 0.95) return "amber";
-    return "green";
-  };
-  const matchesFilter = (field: AwbExtractedField, selectedFilter: FieldFilter) => {
-    if (selectedFilter === "review") {
-      return fieldTone(field) === "red";
-    }
-    if (selectedFilter === "warning") {
-      return fieldTone(field) === "amber";
-    }
-    if (selectedFilter === "valid") {
-      return fieldTone(field) === "green";
-    }
-    if (selectedFilter === "reviewed") return fieldTone(field) === "blue";
-    if (selectedFilter === "missing") return !field.value.trim();
-    return true;
-  };
-  const filters: Array<{ key: FieldFilter; label: string }> = [
-    { key: "all", label: "All" },
-    { key: "review", label: "Needs Review" },
-    { key: "warning", label: "Warnings" },
-    { key: "valid", label: "Valid" },
-    { key: "reviewed", label: "Manually Reviewed" },
-    { key: "missing", label: "Missing" },
-  ];
-  const visibleFields = extraction.fields.filter(
-    (field) =>
-      matchesFilter(field, filter) ||
-      Object.hasOwn(editingValues, field.key) ||
-      pinnedFieldKeys.has(field.key)
-  );
+  const visibleFields = extraction.fields;
 
   const updateEditingValue = (field: AwbExtractedField, value: string) => {
     setEditingValues((current) => {
@@ -1319,55 +1146,10 @@ function ExtractedFieldsPanel({
       delete next[field.key];
       return next;
     });
-    setPinnedFieldKeys((current) => {
-      const next = new Set(current);
-      next.add(field.key);
-      return next;
-    });
-  };
-
-  const selectFilter = (nextFilter: FieldFilter) => {
-    setFilter(nextFilter);
-    setPinnedFieldKeys(new Set());
   };
 
   return (
     <div className="awb-extracted-fields-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.03]">
-      <div className="flex h-10 shrink-0 items-center border-b border-white/[0.08] px-3">
-        <div className="text-[12px] font-extrabold">Extracted Fields</div>
-        <span className="ml-2 rounded bg-[#00d4aa]/15 px-2 py-1 font-mono text-[9px] text-[#00d4aa]">
-          {extraction.summary.capturedFields}/{extraction.summary.totalFields}
-        </span>
-        <div className="ml-auto text-[9px] text-[#64748b]">
-          Avg. confidence{" "}
-          <span className="font-mono font-bold text-[#00d4aa]">
-            {extraction.summary.averageConfidencePercent}%
-          </span>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-white/[0.08] px-3 py-2">
-        {filters.map((item) => {
-          const count = extraction.fields.filter((field) => matchesFilter(field, item.key)).length;
-          const active = filter === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => selectFilter(item.key)}
-              aria-pressed={active}
-              className={`h-[24px] rounded-[5px] border px-2 text-[11px] font-medium leading-none transition ${
-                active
-                  ? "border-[#2f80ff]/55 bg-[#2f80ff]/15 text-[#93c5fd]"
-                  : "border-white/[0.08] bg-white/[0.025] text-[#64748b] hover:border-white/15 hover:text-[#cbd5e1]"
-              }`}
-            >
-              {item.label} <span className="font-mono">{count}</span>
-            </button>
-          );
-        })}
-      </div>
-
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {visibleFields.map((field) => {
           const colors = fieldColorClasses(field);
@@ -1480,6 +1262,7 @@ function ReviewView({
   const [savingDraft, setSavingDraft] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [confirmIssueOpen, setConfirmIssueOpen] = useState(false);
+  const [awbFormMagnifierActive, setAwbFormMagnifierActive] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [manuallyReviewedKeys, setManuallyReviewedKeys] = useState<Set<string>>(
     () => new Set()
@@ -1490,6 +1273,7 @@ function ReviewView({
     ? `${extraction.meta.totalSeconds.toFixed(1)}s`
     : `${(extraction.document.processingTimeMs / 1000).toFixed(1)}s`;
   const isIssued = extraction.document.status === "issued";
+  const awbPreviewReviewStats = getAwbReviewPresentationStats(formData);
 
   const updateFieldValue = (key: string, value: string) => {
     if (!canEdit) return;
@@ -1784,12 +1568,56 @@ function ReviewView({
           </div>
         </div>
 
-        <div className="awb-review-workspace grid min-w-0 grid-cols-1 items-start gap-4 min-[1024px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-[1280px]:grid-cols-2">
-          <div className="awb-review-left-column flex h-[clamp(720px,calc(100vh-210px),1050px)] min-h-0 min-w-0 flex-col overflow-hidden rounded-[9px] border border-white/[0.08] bg-white/[0.02]">
-            <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-3 py-2">
-              <div>
-                <div className="text-[12px] font-extrabold text-white">Review Workspace</div>
+        <div className="awb-review-workspace grid min-w-0 grid-cols-1 items-start gap-4 min-[1024px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="awb-review-left-column flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[12px] border border-white/[0.08] bg-white/[0.02]">
+            <div className="flex min-h-[58px] shrink-0 flex-nowrap items-center gap-2 overflow-hidden border-b border-white/[0.08] px-3 py-0">
+              <div className="awb-preview-review-summary flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
+                <div className="awb-preview-status-chip awb-preview-status-chip-extracted flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-emerald-400/35 bg-emerald-400/[0.12] px-2.5 text-[11px] font-semibold text-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                  Mapped
+                  <strong className="font-mono text-[11px] text-emerald-100">
+                    {awbPreviewReviewStats.extracted}/{awbPreviewReviewStats.total}
+                  </strong>
+                </div>
+                <div className="awb-preview-status-chip awb-preview-status-chip-review flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-amber-400/35 bg-amber-400/[0.12] px-2.5 text-[11px] font-semibold text-amber-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                  Review
+                  <strong className="font-mono text-[11px] text-amber-100">
+                    {awbPreviewReviewStats.review}
+                  </strong>
+                </div>
+                <div className="awb-preview-status-chip awb-preview-status-chip-empty flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-slate-400/25 bg-slate-400/[0.1] px-2.5 text-[11px] font-semibold text-slate-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                  Empty
+                  <strong className="font-mono text-[11px] text-slate-100">
+                    {awbPreviewReviewStats.empty}
+                  </strong>
+                </div>
+                <div className="awb-preview-status-chip awb-preview-status-chip-confidence flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-[#2f80ff]/40 bg-[#2f80ff]/15 px-2.5 text-[11px] font-semibold text-blue-200">
+                  AI Conf
+                  <strong className="font-mono text-[11px] text-blue-100">
+                    {awbPreviewReviewStats.averageConfidence == null
+                      ? "--"
+                      : `${awbPreviewReviewStats.averageConfidence}%`}
+                  </strong>
+                </div>
               </div>
+              {reviewView === "form" ? (
+                <button
+                  type="button"
+                  title="Magnifier"
+                  aria-label="Magnifier"
+                  aria-pressed={awbFormMagnifierActive}
+                  onClick={() => setAwbFormMagnifierActive((current) => !current)}
+                  className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[6px] border transition ${
+                    awbFormMagnifierActive
+                      ? "border-[#2f80ff]/50 bg-[#2f80ff]/15 text-[#60a5fa]"
+                      : "border-white/10 bg-white/[0.04] text-[#64748b] hover:text-white"
+                  }`}
+                >
+                  <Search className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
               <div
                 role="tablist"
                 aria-label="AWB review view"
@@ -1800,7 +1628,7 @@ function ReviewView({
                   role="tab"
                   aria-selected={reviewView === "form"}
                   onClick={() => setReviewView("form")}
-                  className={`h-7 rounded-[5px] px-3 text-[10px] font-bold transition max-sm:px-2 ${
+                  className={`h-[30px] rounded-[5px] px-3 text-[11px] font-semibold transition max-sm:px-2 ${
                     reviewView === "form"
                       ? "bg-[#2f80ff] text-white shadow-sm"
                       : "text-[#64748b] hover:bg-white/[0.05] hover:text-[#cbd5e1]"
@@ -1813,7 +1641,7 @@ function ReviewView({
                   role="tab"
                   aria-selected={reviewView === "fields"}
                   onClick={() => setReviewView("fields")}
-                  className={`h-7 rounded-[5px] px-3 text-[10px] font-bold transition max-sm:px-2 ${
+                  className={`h-[30px] rounded-[5px] px-3 text-[11px] font-semibold transition max-sm:px-2 ${
                     reviewView === "fields"
                       ? "bg-[#2f80ff] text-white shadow-sm"
                       : "text-[#64748b] hover:bg-white/[0.05] hover:text-[#cbd5e1]"
@@ -1840,12 +1668,10 @@ function ReviewView({
             <div
               role="tabpanel"
               hidden={reviewView !== "form"}
-              className="min-h-0 flex-1 p-2"
+              className="min-h-0 flex-1 overflow-visible p-2"
             >
               <AwbDocumentPreview
-                fileName={fileName}
                 data={formData}
-                pages={extraction.document.pages}
                 onSaveDraft={() => void saveDraft()}
                 onExportFinalPdf={() => void issueAwb()}
                 onPaperFieldChange={(payloadKey, value) => {
@@ -1855,11 +1681,12 @@ function ReviewView({
                 savingDraft={savingDraft}
                 exportingPdf={issuing}
                 readOnly={!canEdit}
+                magnifierActive={awbFormMagnifierActive}
               />
             </div>
           </div>
 
-          <div className="awb-review-source-column h-[clamp(720px,calc(100vh-210px),1050px)] min-h-0 min-w-0">
+          <div className="awb-review-source-column min-h-0 min-w-0">
             <UploadedPdfPanel fileName={fileName} pdfUrl={pdfUrl} sourceStored={sourceStored} />
           </div>
         </div>
@@ -2083,7 +1910,7 @@ function ReviewView({
 
         .dashboard-theme-light .awb-review-page .awb-document-scroll,
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:last-child {
-          background-color: #f8fafc !important;
+          background-color: #ffffff !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-document-scroll .awb-form {
@@ -2153,24 +1980,10 @@ function ReviewView({
           color: #2f80ff !important;
         }
 
-        @media (max-width: 1279px) {
-          .awb-review-left-column,
-          .awb-review-source-column {
-            height: 720px;
-            min-height: 560px;
-          }
-        }
-
         @media (max-width: 767px) {
           .awb-review-summary > div:nth-child(2) {
             min-width: 0;
             flex: 1;
-          }
-
-          .awb-review-left-column,
-          .awb-review-source-column {
-            height: 620px;
-            min-height: 520px;
           }
         }
       `}</style>
@@ -2633,6 +2446,48 @@ function AwbProcessingPageContent() {
   .dashboard-theme-light .awb-upload-page {
     background-color: #f3f4f6 !important;
     color: #0f172a;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-view {
+    background: radial-gradient(circle at 35% 35%, rgba(59, 130, 246, 0.10), transparent 32%),
+      linear-gradient(90deg, #eef4fb 0%, #f8fafc 48%, #f1f5f9 100%) !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-stepper,
+  .dashboard-theme-light .awb-upload-page .awb-processing-card {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-title {
+    color: #0f172a !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-subtitle,
+  .dashboard-theme-light .awb-upload-page .awb-processing-muted-step {
+    color: #475569 !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-muted-line,
+  .dashboard-theme-light .awb-upload-page .awb-processing-track {
+    background-color: #dbe3ef !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-muted-badge {
+    border-color: #cbd5e1 !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-spinner {
+    border-color: #cbd5e1 !important;
+    border-top-color: #2f80ff !important;
+  }
+
+  .dashboard-theme-light .awb-upload-page .awb-processing-secondary-action {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #475569 !important;
   }
 
   .dashboard-theme-light .awb-upload-page .awb-stepper {

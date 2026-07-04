@@ -1,178 +1,393 @@
-# STRICT FIX — PRODUCTION LOGIN SESSION_COOKIE_ERROR
 
-We deployed SemloX to Vercel.
+````md
+# SEMLOX AWB FORM BUG FIX — FOCUS LOSS + FIELD COUNT + VISUAL INTEGRATION
 
-Current issue:
-- Public companies load correctly, so Supabase connectivity is working.
-- Same login credentials work locally.
-- In production, POST /api/auth/login returns 500.
-- Response body is:
+You are working on the SemloX AWB Processing page.
 
-{
-  "ok": false,
-  "code": "SESSION_COOKIE_ERROR",
-  "message": "Could not start your session. Please try again."
-}
+Primary file likely:
+- `app/dashboard/awb/page.tsx`
 
-This means login likely reaches Supabase, but fails while creating or setting the `semlox_session` cookie.
+If AWB Form is split into child components, inspect only those AWB-related child components.
 
-CRITICAL RULES:
-- Do NOT rewrite the auth system.
-- Do NOT change database schema.
-- Do NOT change Supabase tables.
-- Do NOT change frontend UI.
-- Do NOT remove cookie-based auth.
-- Only fix `/api/auth/login` cookie/session creation safely.
-- Keep local login working.
+## CRITICAL RULES
 
-Current auth design:
-- Primary session cookie name: `semlox_session`
-- Cookie must be httpOnly
-- Cookie must be secure in production
-- Cookie must use sameSite lax
-- Cookie must use path "/"
-- Middleware validates this cookie
-- Frontend relies on this cookie after login
+- DO NOT change backend code.
+- DO NOT change API routes.
+- DO NOT change Supabase/auth/session/middleware.
+- DO NOT change database schema.
+- DO NOT change extraction API response structure.
+- DO NOT change PDF viewer logic.
+- DO NOT touch login/settings/dashboard overview.
+- ONLY fix AWB Processing frontend rendering bugs.
+- Make the smallest safe changes.
+- Inspect first, explain findings, then patch.
 
-Files to inspect:
-- `app/api/auth/login/route.ts`
-- `lib/auth.ts`
-- `middleware.ts`
+---
 
-Main task:
-Find exactly why `/api/auth/login` throws `SESSION_COOKIE_ERROR` in production.
+# CURRENT BUGS TO FIX
 
-Check these possible causes:
+The AWB Processing page has 3 main UI areas:
 
-1. Cookie value too large
-If the route stores the full Supabase session/user object in `semlox_session`, fix it.
-Do NOT store full session object.
-Do NOT store full user object.
-Only store minimal data needed by middleware/helper:
+1. AWB Form
+2. Extracted Fields
+3. Source Document / PDF Viewer
 
-{
-  access_token,
-  refresh_token,
-  expires_at
-}
+The current bugs are in the AWB Form.
 
-Optionally include:
-{
-  user_id,
-  email
-}
+---
 
-But avoid full metadata.
+# BUG 1 — INPUT FOCUS LOST AFTER TYPING ONE CHARACTER
 
-Cookie should stay under browser cookie size limits.
+## Current behavior
 
-2. Wrong cookie setting method
-If the route uses `Response.json()` and then tries to set cookies incorrectly, fix it to use `NextResponse`.
+When I click into an AWB Form field and type one character:
 
-Correct pattern:
+- the character is entered
+- immediately the input loses focus
+- I have to click the field again to type another character
 
-```ts
-import { NextResponse } from "next/server";
+This is a serious controlled-input/rendering bug.
 
-const response = NextResponse.json({
-  ok: true,
-  user: {
-    id: user.id,
-    email: user.email
-  }
-});
+## Required investigation
 
-response.cookies.set("semlox_session", encodedSession, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
-  path: "/",
-  maxAge: maxAgeSeconds
-});
+Inspect the AWB Form field rendering.
 
-return response;
+Look specifically for:
 
+- unstable React keys
+- keys based on field value
+- keys based on edited value
+- keys based on JSON.stringify
+- keys using Date.now()
+- keys using Math.random()
+- conditional component remounting
+- map rendering where key changes after each input update
+- switching between textarea/input based on value
+- parent component remounting on each keystroke
+- state update rebuilding the entire AWB form tree
+- active tab/state causing full remount
+- derived presentation data recreated in a way that changes keys
 
+Search for:
+```txt
+key=
+Math.random
+Date.now
+JSON.stringify
+onChange
+setState
+setData
+setEdited
+setFields
+AwbDocumentPreview
+AwbPaperContent
+renderField
+textarea
+input
+contentEditable
+````
 
+## Required fix
 
-Do not use a pattern that works locally but fails on Vercel.
+The input must keep focus while typing.
 
-3. Encoding issue
-   If encoding uses `btoa()` or browser-only APIs, replace with Node-safe encoding:
+Rules:
 
-```ts
-const encodedSession = Buffer.from(JSON.stringify(sessionPayload), "utf8").toString("base64url");
+* React keys for AWB form fields must be stable.
+* Use stable field id/name/path as key.
+* Do NOT use field value as key.
+* Do NOT use edited value as key.
+* Do NOT remount the whole AWB form on every keystroke.
+* State updates should only update the relevant field value.
+* The textarea/input element should remain the same DOM node while editing.
+
+## Expected result
+
+After fix:
+
+* Click any AWB Form field.
+* Type multiple characters continuously.
+* Focus stays inside the field.
+* Cursor does not jump.
+* No need to click again after each character.
+
+---
+
+# BUG 2 — AWB FORM COUNT STILL WRONG
+
+## Current issue
+
+AWB Form review summary now shows:
+
+```txt
+Extracted 16
 ```
 
-And decoding should match:
+But when manually counting visible rendered fields inside AWB Form, only 15 fields appear.
+
+This means the summary count and visible rendered form fields are still not fully aligned.
+
+## Important distinction
+
+Do NOT fake the number.
+
+Do NOT hardcode 15 or 16.
+
+We need to understand:
+
+* Is AWB Form supposed to show all 16 extracted fields?
+* Or does AWB Form layout intentionally hide some extracted field?
+* Which exact field is missing from AWB Form rendering?
+
+## Required investigation
+
+Compare:
+
+1. Normalized extracted fields used by Extracted Fields panel
+2. Fields counted in AWB Form review summary
+3. Fields actually rendered visually in AWB Form
+
+Create a temporary dev-only diagnostic log if needed, but do not log sensitive values.
+
+Allowed dev-only log:
 
 ```ts
-JSON.parse(Buffer.from(cookieValue, "base64url").toString("utf8"));
+console.log("[awb-form-debug] extracted field keys", extractedFieldKeys);
+console.log("[awb-form-debug] rendered AWB form field keys", renderedFieldKeys);
+console.log("[awb-form-debug] missing from AWB form", missingKeys);
 ```
 
-4. Runtime issue
-   If the route is using Edge runtime and Node APIs like Buffer are not supported, either:
+Only in development mode.
 
-* remove `runtime = "edge"` from `/api/auth/login`, or
-* use Web-compatible encoding safely.
+Never log full documents if sensitive.
+
+## Required fix
+
+Find the missing field and either:
+
+Option A:
+
+* Render the missing field in the correct AWB Form section if it belongs in the AWB layout.
+
+OR Option B:
+
+* If the missing field does not belong to the visual AWB Form layout, then AWB Form summary should clearly count only rendered AWB Form fields, not all extracted fields.
 
 Preferred:
-Use Node.js runtime for auth login route if cookie/session encoding uses Buffer.
 
-5. Add safe logs temporarily
-   Add safe server logs around cookie creation.
+* AWB Form and Extracted Fields should both use the same normalized source of truth.
+* If AWB Form claims `Extracted 16`, then 16 fields should be represented in the AWB Form.
 
-Allowed logs:
+## Success criteria
 
-* `[auth-login] request received`
-* `[auth-login] supabase sign-in success true/false`
-* `[auth-login] session exists true/false`
-* `[auth-login] cookie payload keys`
-* `[auth-login] encoded cookie length`
-* `[auth-login] setting cookie`
-* `[auth-login] cookie set success`
-* `[auth-login] cookie error message`
+After fix:
 
-Never log:
+* AWB Form count matches actual rendered fields.
+* No mismatch between summary and visible AWB Form fields.
+* No hardcoded count.
+* Missing field is identified and handled properly.
 
-* password
-* access token
-* refresh token
-* full session
-* cookie value
-* service role key
-* authorization header
+---
 
-6. Improve error detail internally
-   Keep user-facing message safe, but log exact server error in Vercel logs.
+# BUG 3 — AWB FORM STILL LOOKS LIKE A SEPARATE INNER COMPONENT
 
-Return structured error:
+## Current issue
 
-```json
-{
-  "ok": false,
-  "code": "SESSION_COOKIE_ERROR",
-  "message": "Could not start your session. Please try again."
-}
+AWB Form still visually looks like a separate mini-app inside the page.
+
+Problems visible:
+
+* heavy shadow around AWB paper/form
+* nested card feeling
+* inner framed surface
+* form looks disconnected from main workspace
+* too much depth/elevation
+* still feels like a separate preview component instead of part of the AWB Processing workspace
+
+## Required visual fix
+
+Make AWB Form feel like a direct part of the main page component.
+
+Reduce the nested mini-app feeling.
+
+Specifically inspect and adjust:
+
+* wrapper shadow classes
+* inner card background
+* excessive borders
+* nested rounded containers
+* dark inner frames
+* unnecessary drop shadows
+* internal panel surfaces
+
+Search for classes like:
+
+```txt
+shadow
+shadow-lg
+shadow-xl
+drop-shadow
+rounded
+border
+bg-slate
+bg-gray
+overflow-hidden
+ring
 ```
 
-But server logs should show the real cause.
+## Required styling direction
 
-7. Success criteria
-   After fix:
+Light mode:
 
-* POST /api/auth/login returns 200
-* response body has `{ ok: true }`
-* response headers include `Set-Cookie: semlox_session=...`
-* Application → Cookies shows `semlox_session`
-* user redirects to dashboard
-* middleware accepts cookie
-* local login still works
-* production login works
+* AWB Form outer surface should be clean white / very light gray
+* avoid strong shadow
+* use subtle border only
+* no dark/black internal container
+* no heavy paper drop shadow
+* reduce nested elevation
 
-Do not change anything else.
+Dark mode:
+
+* dark navy surface allowed
+* but avoid multiple nested dark boxes
+* use subtle border/elevation only
+
+## Important
+
+Do NOT remove the AWB Form itself.
+
+Do NOT break the AWB form layout.
+
+Only reduce the nested visual treatment.
+
+## Success criteria
+
+After fix:
+
+* AWB Form feels integrated into the workspace.
+* It does not look like a separate embedded app.
+* Shadow is reduced or removed.
+* One clean surface hierarchy only.
+
+---
+
+# BUG 4 — INPUT TITLES/LABELS NEED SLIGHTLY BIGGER FONT
+
+## Current issue
+
+AWB Form field titles/labels are too small.
+
+Examples:
+
+* Shipper's Name and Address
+* Consignee's Name and Address
+* Airport of Destination
+* Handling Information
+* Nature and Quantity of Goods
+* Accounting Information
+* AWB Number
+
+The labels are hard to read.
+
+## Required fix
+
+Increase only AWB Form field label/title font size by 1 step.
+
+Do NOT increase input value font size.
+
+Suggested:
+
+* If labels are `text-[8px]`, increase to `text-[9px]` or `text-[10px]`
+* If labels are `text-[9px]`, increase to `text-[10px]`
+* If labels use `text-[10px]`, increase to `text-[11px]`
+
+Keep them compact.
+
+## Important
+
+* Only field labels/titles should increase.
+* Field values should remain compact.
+* Confidence badges should stay readable but not oversized.
+* Do not make the form bulky.
+
+## Success criteria
+
+* Labels are easier to read.
+* Values remain compact.
+* AWB form layout does not distort.
+
+---
+
+# EXTRA SAFETY RULES
+
+## Do not change these
+
+Do NOT change:
+
+* extracted field backend data
+* PDF viewer
+* source document renderer
+* upload flow
+* issue AWB flow
+* save draft logic
+* stepper logic
+* auth/session
+* dashboard layout outside AWB
+* settings page
+
+---
+
+# DEVELOPMENT PROCESS REQUIRED
+
+Before patching:
+
+1. Inspect AWB Form rendering code.
+2. Identify why focus is lost.
+3. Identify field count mismatch source.
+4. Identify visual wrapper/shadow classes causing nested component feeling.
+5. Identify AWB Form label/title styling.
+6. Report findings briefly.
+7. Then patch only relevant code.
+
+---
+
+# FINAL SUCCESS CHECKLIST
+
+After changes, test manually:
+
+## Focus test
+
+* Click AWB Form field.
+* Type several characters.
+* Focus remains active.
+* Cursor stays stable.
+
+## Count test
+
+* AWB Form summary count matches rendered fields.
+* Missing field is identified and fixed/handled.
+* No hardcoded count.
+
+## Visual integration test
+
+* AWB Form no longer looks like a separate mini-app.
+* Heavy shadow/nested feeling is removed.
+* It blends with main workspace.
+
+## Typography test
+
+* AWB Form labels are one step larger.
+* AWB Form values are still compact.
+* Layout remains stable.
+
+## Regression test
+
+* Extracted Fields panel still works.
+* Source Document/PDF still works.
+* Light/dark mode still works.
+* No backend/API/auth changes.
 
 ```
 
-Most likely fix: your login route is trying to store too much session data in the cookie or setting the cookie using a method that fails on Vercel. The model should inspect `/api/auth/login/route.ts` first.
+Also model ko bolo agar woh sirf CSS change kare aur focus-loss bug na trace kare, toh task incomplete hai. Focus loss ka root mostly **unstable key / remount on every keystroke** hota hai.
 ```

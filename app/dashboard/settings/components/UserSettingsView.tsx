@@ -606,7 +606,7 @@ export default function UserSettingsView({
           </div>
         ) : null}
 
-        <div className="mb-5 flex items-center gap-4 rounded-[12px] border border-[#1B3B73] bg-gradient-to-r from-[#2F80FF]/10 to-[#00C6FF]/5 px-5 py-4">
+        <div className="settings-user-workspace-banner mb-5 flex items-center gap-4 rounded-[12px] border border-[#1B3B73] bg-gradient-to-r from-[#2F80FF]/10 to-[#00C6FF]/5 px-5 py-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[11px] bg-gradient-to-br from-[#2F80FF] to-[#5865F2] text-[15px] font-bold text-white">
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
