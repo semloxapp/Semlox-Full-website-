@@ -3,6 +3,162 @@
 :root {
   --background: #f4f7fb;
   --foreground: #0f172a;
+
+  --semlox-color-primary: #2f80ff;
+  --semlox-color-primary-end: #00b8e6;
+  --semlox-color-page-dark: #04060f;
+  --semlox-color-control-dark: #0b1220;
+  --semlox-color-surface-dark: rgba(255, 255, 255, 0.025);
+  --semlox-color-border-dark: rgba(255, 255, 255, 0.08);
+  --semlox-color-border-control-dark: rgba(255, 255, 255, 0.1);
+  --semlox-color-text-dark: #ffffff;
+  --semlox-color-text-muted-dark: #64748b;
+  --semlox-color-surface-light: #ffffff;
+  --semlox-color-border-light: #d5deea;
+  --semlox-color-border-control-light: #b9c6d8;
+  --semlox-color-text-light: #0f172a;
+  --semlox-color-text-muted-light: #52647a;
+
+  --semlox-text-primary: #f8fafc;
+  --semlox-text-secondary: #cbd5e1;
+  --semlox-text-muted: #94a3b8;
+  --semlox-text-disabled: #64748b;
+  --semlox-text-inverse: #ffffff;
+  --semlox-text-link: #60a5fa;
+
+  --semlox-status-success-bg: rgba(52, 211, 153, 0.1);
+  --semlox-status-success-border: rgba(52, 211, 153, 0.25);
+  --semlox-status-success-text: #6ee7b7;
+  --semlox-status-warning-bg: rgba(251, 191, 36, 0.1);
+  --semlox-status-warning-border: rgba(251, 191, 36, 0.25);
+  --semlox-status-warning-text: #fcd34d;
+  --semlox-status-danger-bg: rgba(248, 113, 113, 0.1);
+  --semlox-status-danger-border: rgba(248, 113, 113, 0.25);
+  --semlox-status-danger-text: #fca5a5;
+  --semlox-status-info-bg: rgba(96, 165, 250, 0.1);
+  --semlox-status-info-border: rgba(96, 165, 250, 0.25);
+  --semlox-status-info-text: #93c5fd;
+  --semlox-status-neutral-bg: rgba(148, 163, 184, 0.1);
+  --semlox-status-neutral-border: rgba(148, 163, 184, 0.25);
+  --semlox-status-neutral-text: #cbd5e1;
+
+  --semlox-interactive-surface: rgba(255, 255, 255, 0.025);
+  --semlox-interactive-border: rgba(255, 255, 255, 0.1);
+  --semlox-interactive-hover: rgba(96, 165, 250, 0.08);
+  --semlox-interactive-active: rgba(96, 165, 250, 0.14);
+
+  --semlox-type-page-title-size: 1.125rem;
+  --semlox-type-page-title-line: 1.3;
+  --semlox-type-page-title-weight: 700;
+  --semlox-type-section-title-size: 0.8125rem;
+  --semlox-type-section-title-line: 1.35;
+  --semlox-type-section-title-weight: 700;
+  --semlox-type-body-size: 0.75rem;
+  --semlox-type-body-line: 1.45;
+  --semlox-type-body-weight: 400;
+  --semlox-type-button-size: 0.75rem;
+  --semlox-type-button-line: 1;
+  --semlox-type-button-weight: 500;
+  --semlox-type-input-size: 0.75rem;
+  --semlox-type-input-line: 1.25;
+  --semlox-type-input-weight: 400;
+  --semlox-type-label-size: 0.625rem;
+  --semlox-type-label-line: 1.3;
+  --semlox-type-label-weight: 600;
+  --semlox-type-table-header-size: 0.625rem;
+  --semlox-type-table-header-line: 1.25;
+  --semlox-type-table-header-weight: 600;
+  --semlox-type-table-body-size: 0.6875rem;
+  --semlox-type-table-body-line: 1.4;
+  --semlox-type-table-body-weight: 400;
+  --semlox-type-metadata-size: 0.5625rem;
+  --semlox-type-metadata-line: 1.3;
+  --semlox-type-metadata-weight: 400;
+  --semlox-type-badge-size: 0.5625rem;
+  --semlox-type-badge-line: 1;
+  --semlox-type-badge-weight: 500;
+  --semlox-type-kpi-value-size: 1.5rem;
+  --semlox-type-kpi-value-line: 1.1;
+  --semlox-type-kpi-value-weight: 700;
+  --semlox-type-kpi-label-size: 0.6875rem;
+  --semlox-type-kpi-label-line: 1.25;
+  --semlox-type-kpi-label-weight: 600;
+  --semlox-type-kpi-description-size: 0.6875rem;
+  --semlox-type-kpi-description-line: 1.35;
+  --semlox-type-kpi-description-weight: 400;
+
+  --semlox-font-page-title: var(--semlox-type-page-title-size);
+  --semlox-font-section-title: var(--semlox-type-section-title-size);
+  --semlox-font-subsection-title: var(--semlox-type-section-title-size);
+  --semlox-font-body: var(--semlox-type-body-size);
+  --semlox-font-nav: 0.75rem;
+  --semlox-font-button: var(--semlox-type-button-size);
+  --semlox-font-input: 0.6875rem;
+  --semlox-font-label: var(--semlox-type-label-size);
+  --semlox-font-helper: 0.625rem;
+  --semlox-font-table-header: var(--semlox-type-table-header-size);
+  --semlox-font-table-body: var(--semlox-type-table-body-size);
+  --semlox-font-badge: var(--semlox-type-badge-size);
+  --semlox-font-caption: 0.6875rem;
+  --semlox-weight-page-title: var(--semlox-type-page-title-weight);
+  --semlox-weight-section-title: var(--semlox-type-section-title-weight);
+  --semlox-weight-body: var(--semlox-type-body-weight);
+  --semlox-weight-button: var(--semlox-type-button-weight);
+  --semlox-weight-table-header: var(--semlox-type-table-header-weight);
+  --semlox-weight-table-body: var(--semlox-type-table-body-weight);
+  --semlox-weight-metadata: var(--semlox-type-metadata-weight);
+  --semlox-weight-badge: var(--semlox-type-badge-weight);
+
+  --semlox-icon-xs: 0.75rem;
+  --semlox-icon-sm: 0.8125rem;
+  --semlox-icon-md: 0.875rem;
+  --semlox-icon-nav: 1rem;
+  --semlox-icon-feature: 1.125rem;
+
+  --semlox-control-toggle: 1.875rem;
+  --semlox-control-compact: 1.875rem;
+  --semlox-control-standard: 2.125rem;
+  --semlox-control-large: 2.25rem;
+
+  --semlox-radius-compact: 0.375rem;
+  --semlox-radius-control: 0.5rem;
+  --semlox-radius-card: 0.75rem;
+  --semlox-radius-pill: 9999px;
+
+  --semlox-space-1: 0.25rem;
+  --semlox-space-2: 0.5rem;
+  --semlox-space-3: 0.75rem;
+  --semlox-space-4: 1rem;
+  --semlox-space-5: 1.25rem;
+  --semlox-space-6: 1.5rem;
+}
+
+.dashboard-theme-light {
+  --semlox-text-primary: #0f172a;
+  --semlox-text-secondary: #475569;
+  --semlox-text-muted: #64748b;
+  --semlox-text-disabled: #94a3b8;
+  --semlox-text-inverse: #ffffff;
+  --semlox-text-link: #2f80ff;
+  --semlox-status-success-bg: #ecfdf5;
+  --semlox-status-success-border: #a7f3d0;
+  --semlox-status-success-text: #059669;
+  --semlox-status-warning-bg: #fff7ed;
+  --semlox-status-warning-border: #fed7aa;
+  --semlox-status-warning-text: #ea580c;
+  --semlox-status-danger-bg: #fef2f2;
+  --semlox-status-danger-border: #fecaca;
+  --semlox-status-danger-text: #dc2626;
+  --semlox-status-info-bg: #eff6ff;
+  --semlox-status-info-border: #bfdbfe;
+  --semlox-status-info-text: #2563eb;
+  --semlox-status-neutral-bg: #f8fafc;
+  --semlox-status-neutral-border: #cbd5e1;
+  --semlox-status-neutral-text: #475569;
+  --semlox-interactive-surface: #ffffff;
+  --semlox-interactive-border: #b9c6d8;
+  --semlox-interactive-hover: #edf4ff;
+  --semlox-interactive-active: #dbeafe;
 }
 
 @theme inline {
@@ -12,12 +168,32 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
 }
+
+/* Application pages use these semantic roles and shared UI primitives.
+   Avoid arbitrary structural font sizes and neutral text colors in pages;
+   feature-specific metrics and visualizations may remain local. */
+.semlox-page-title { font-size: var(--semlox-type-page-title-size); line-height: var(--semlox-type-page-title-line); font-weight: var(--semlox-type-page-title-weight); color: var(--semlox-text-primary); }
+.semlox-section-title { font-size: var(--semlox-type-section-title-size); line-height: var(--semlox-type-section-title-line); font-weight: var(--semlox-type-section-title-weight); color: var(--semlox-text-primary); }
+.semlox-body { font-size: var(--semlox-type-body-size); line-height: var(--semlox-type-body-line); font-weight: var(--semlox-type-body-weight); color: var(--semlox-text-secondary); }
+.semlox-button-text { font-size: var(--semlox-type-button-size); line-height: var(--semlox-type-button-line); font-weight: var(--semlox-type-button-weight); }
+.semlox-label { font-size: var(--semlox-type-label-size); line-height: var(--semlox-type-label-line); font-weight: var(--semlox-type-label-weight); color: var(--semlox-text-muted); }
+.semlox-table-header { font-size: var(--semlox-type-table-header-size); line-height: var(--semlox-type-table-header-line); font-weight: var(--semlox-type-table-header-weight); color: var(--semlox-text-muted); }
+.semlox-table-body { font-size: var(--semlox-type-table-body-size); line-height: var(--semlox-type-table-body-line); font-weight: var(--semlox-type-table-body-weight); color: var(--semlox-text-secondary); }
+.semlox-metadata { font-size: var(--semlox-type-metadata-size); line-height: var(--semlox-type-metadata-line); font-weight: var(--semlox-type-metadata-weight); color: var(--semlox-text-muted); }
+.semlox-identifier { font-size: var(--semlox-type-table-body-size); line-height: var(--semlox-type-table-body-line); font-weight: 700; color: var(--semlox-text-primary); }
+.semlox-link { font-size: var(--semlox-type-table-body-size); line-height: var(--semlox-type-table-body-line); font-weight: 600; color: var(--semlox-text-link); }
+.semlox-badge-text { font-size: var(--semlox-type-badge-size); line-height: var(--semlox-type-badge-line); font-weight: var(--semlox-type-badge-weight); }
+.semlox-input-text { font-size: var(--semlox-type-input-size); line-height: var(--semlox-type-input-line); font-weight: var(--semlox-type-input-weight); color: var(--semlox-text-secondary); }
+.semlox-kpi-value { font-size: var(--semlox-type-kpi-value-size); line-height: var(--semlox-type-kpi-value-line); font-weight: var(--semlox-type-kpi-value-weight); }
+.semlox-kpi-label { font-size: var(--semlox-type-kpi-label-size); line-height: var(--semlox-type-kpi-label-line); font-weight: var(--semlox-type-kpi-label-weight); color: var(--semlox-text-muted); }
+.semlox-kpi-description { font-size: var(--semlox-type-kpi-description-size); line-height: var(--semlox-type-kpi-description-line); font-weight: var(--semlox-type-kpi-description-weight); color: var(--semlox-text-muted); }
 
 button,
 input,
@@ -38,6 +214,30 @@ textarea {
   outline: 2px solid #2f80ff;
   outline-offset: 2px;
 }
+
+.semlox-compact-action {
+  display: inline-flex;
+  height: var(--semlox-control-compact);
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--semlox-status-info-border);
+  border-radius: var(--semlox-radius-compact);
+  background: var(--semlox-status-info-bg);
+  padding-inline: 0.75rem;
+  color: var(--semlox-text-link);
+  font-size: var(--semlox-font-button);
+  font-weight: var(--semlox-weight-button);
+  transition: background-color 150ms, border-color 150ms, color 150ms;
+}
+
+.semlox-compact-action:hover {
+  border-color: var(--semlox-text-link);
+  background: var(--semlox-interactive-hover);
+}
+
+.semlox-compact-action:active { background: var(--semlox-interactive-active); }
+.semlox-compact-action:focus-visible { outline: 2px solid var(--semlox-color-primary); outline-offset: 2px; }
 
 :root:root :is(button, a, [role="button"]).primary-blue-action,
 :root:root :is(button, a, [role="button"])[class*="bg-[#2F80FF]"],

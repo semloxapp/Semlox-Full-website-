@@ -1,5 +1,6 @@
 import {
   awbJsonResponse,
+  createAwbSourceSignedUrl,
   getAwbDocumentForUser,
   getAwbFields,
   isAwbUuid,
@@ -28,6 +29,10 @@ export async function GET(
     }
     const fields = await getAwbFields(documentId);
     const extraction = toAwbExtractionResponse(access.document, fields);
+    const sourceUrl =
+      access.document.status === "issued"
+        ? null
+        : await createAwbSourceSignedUrl(access.document.storage_path);
     return awbJsonResponse({
       ok: true,
       data: {
@@ -36,6 +41,7 @@ export async function GET(
           uploadedBy: access.document.uploaded_by,
           fileSize: access.document.file_size,
           storagePath: access.document.storage_path,
+          sourceUrl,
           createdAt: access.document.created_at,
           updatedAt: access.document.updated_at,
           canEdit:

@@ -5,6 +5,7 @@ import {
   getUserFromAccessToken,
 } from "@/lib/auth";
 import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import type {
   AwbExtractedField,
   AwbExtractionMode,
@@ -15,6 +16,8 @@ import { awbSummaryFromFields } from "./fieldStats";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const AWB_SOURCE_BUCKET = process.env.AWB_SOURCE_BUCKET || "awb-source-documents";
+const SOURCE_SIGNED_URL_SECONDS = 60 * 60;
 
 export type AwbAccessContext = {
   userId: string;
@@ -75,6 +78,64 @@ function serviceHeaders(extra?: Record<string, string>) {
   };
 }
 
+function serviceClient() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error("AWB persistence service unavailable");
+  }
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function safeStorageFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "source-file";
+}
+
+async function uploadAwbSourceFile(input: {
+  companyId: string;
+  userId: string;
+  documentId: string;
+  file: File;
+}) {
+  const path = `${input.companyId}/${input.documentId}/${safeStorageFileName(input.file.name)}`;
+  const bytes = await input.file.arrayBuffer();
+  const { error } = await serviceClient()
+    .storage
+    .from(AWB_SOURCE_BUCKET)
+    .upload(path, bytes, {
+      contentType: input.file.type || "application/octet-stream",
+      upsert: false,
+      metadata: {
+        document_id: input.documentId,
+        uploaded_by: input.userId,
+      },
+    });
+  if (error) throw new Error("Failed to store AWB source file");
+  return path;
+}
+
+async function deleteAwbSourceFile(storagePath: string | null | undefined) {
+  if (!storagePath) return;
+  await serviceClient()
+    .storage
+    .from(AWB_SOURCE_BUCKET)
+    .remove([storagePath])
+    .catch(() => null);
+}
+
+export async function createAwbSourceSignedUrl(storagePath: string | null | undefined) {
+  if (!storagePath) return null;
+  const { data, error } = await serviceClient()
+    .storage
+    .from(AWB_SOURCE_BUCKET)
+    .createSignedUrl(storagePath, SOURCE_SIGNED_URL_SECONDS);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
 async function bestEffortInsert(table: string, body: unknown) {
   if (!supabaseUrl || !supabaseServiceRoleKey) return false;
   try {
@@ -126,7 +187,7 @@ export async function authenticateAwbRequest(
   request: Request,
   requestedCompanyId?: string | null
 ): Promise<AwbAccessContext | null> {
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return null;
   const user = await getUserFromAccessToken(token);
   if (!user?.id) return null;
@@ -182,6 +243,30 @@ export async function createPersistedAwbExtraction(
   const document = Array.isArray(documentRows) ? (documentRows[0] as DocumentRow | undefined) : undefined;
   if (!documentResponse.ok || !document?.id) throw new Error("Failed to create AWB document");
 
+  let storagePath: string | null = null;
+  try {
+    storagePath = await uploadAwbSourceFile({
+      companyId: context.companyId,
+      userId: context.userId,
+      documentId: document.id,
+      file,
+    });
+    const storageResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ storage_path: storagePath }),
+    });
+    if (!storageResponse.ok) throw new Error("Failed to update AWB source path");
+    document.storage_path = storagePath;
+  } catch (error) {
+    await deleteAwbSourceFile(storagePath);
+    await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
+      method: "DELETE",
+      headers: serviceHeaders(),
+    }).catch(() => null);
+    throw error;
+  }
+
   const fieldResponse = await fetch(`${supabaseUrl}/rest/v1/awb_fields`, {
     method: "POST",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
@@ -203,6 +288,7 @@ export async function createPersistedAwbExtraction(
     ),
   });
   if (!fieldResponse.ok) {
+    await deleteAwbSourceFile(document.storage_path);
     await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
       method: "DELETE",
       headers: serviceHeaders(),
@@ -244,12 +330,34 @@ export async function createPersistedAwbFailure(
   if (!response.ok || !documentId) {
     throw new Error("Failed to create failed AWB document");
   }
+  let storagePath: string | null = null;
+  try {
+    storagePath = await uploadAwbSourceFile({
+      companyId: context.companyId,
+      userId: context.userId,
+      documentId,
+      file,
+    });
+    const storageResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ storage_path: storagePath }),
+    });
+    if (!storageResponse.ok) throw new Error("Failed to update failed AWB source path");
+  } catch (error) {
+    await deleteAwbSourceFile(storagePath);
+    await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
+      method: "DELETE",
+      headers: serviceHeaders(),
+    }).catch(() => null);
+    throw error;
+  }
   return documentId;
 }
 
 export async function getAwbDocumentForUser(request: Request, documentId: string) {
   if (!supabaseUrl || !isAwbUuid(documentId)) return null;
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return null;
   const user = await getUserFromAccessToken(token);
   if (!user?.id) return null;
@@ -605,14 +713,17 @@ export function validateAwbForIssue(fields: AwbExtractedField[]) {
 
 export async function setAwbDocumentIssued(
   documentId: string,
-  summary?: AwbExtractionResponse["summary"]
+  summary?: AwbExtractionResponse["summary"],
+  storagePath?: string | null
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
+  await deleteAwbSourceFile(storagePath);
   const response = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
     method: "PATCH",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify({
       status: "issued",
+      storage_path: null,
       ...(summary ? { summary } : {}),
     }),
   });

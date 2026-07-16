@@ -1,120 +1,38 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { supabaseUrl, supabaseAnonKey } from "./lib/supabase";
+import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
-const PROTECTED_PATHS = ["/dashboard", "/dashboard/", "/dashboard/", "/dashboard"];
-const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 2;
-
-function decodeSessionCookie(cookieValue: string) {
-  const normalized = cookieValue.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const decoded = typeof globalThis.atob === "function"
-    ? globalThis.atob(padded)
-    : Buffer.from(cookieValue, "base64url").toString("utf8");
-  return JSON.parse(decoded);
+function isProtectedPage(pathname: string) {
+  // Only /dashboard and its subpaths exist as protected pages in this app.
+  // (The previous matcher also listed /settings/*, /awb/*, /documents/* as
+  // top-level paths, but those routes don't exist outside of
+  // /dashboard/settings, /dashboard/awb, /dashboard/history — that was dead
+  // code and has been removed.)
+  return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 }
 
-function isProtected(pathname: string) {
-  // Match /dashboard and any subpaths, and other protected prefixes
-  return (
-    pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/") ||
-    pathname.startsWith("/settings/") ||
-    pathname.startsWith("/awb/") ||
-    pathname.startsWith("/documents/")
-  );
-}
+export async function middleware(request: NextRequest) {
+  // Refreshes the Supabase session (access + refresh token) for *every*
+  // matched request — including /api/* calls, not just page navigations.
+  // This is what actually fixes the "logged out after ~1 hour of using the
+  // AWB review screen" issue: previously only full page loads went through
+  // middleware, so a session that expired mid-session (all client fetches,
+  // no navigation) had no chance to refresh until the next page load.
+  const { supabaseResponse, user } = await updateSupabaseSession(request);
 
-export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  if (!isProtected(pathname)) return NextResponse.next();
-
-  try {
-    const cookie = req.headers.get("cookie") || "";
-    const match = cookie.split(";").map((c) => c.trim()).find((c) => c.startsWith("semlox_session="));
-    if (!match) {
-      const loginUrl = new URL("/login", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    const cookieVal = match.split("=")[1] || "";
-    let payload = null;
-    try {
-      payload = decodeSessionCookie(cookieVal);
-    } catch (e) {
-      const loginUrl = new URL("/login", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    let accessToken = payload?.access_token;
-    const refreshToken = payload?.refresh_token;
-    const expiresAt = Number(payload?.expires_at) || 0;
-
-    // If access token expired or about to expire, attempt refresh
-    const now = Date.now();
-    const refreshBufferMs = 30 * 1000; // 30s buffer
-    if ((!accessToken || now > expiresAt - refreshBufferMs) && refreshToken) {
-      try {
-        const tokenResp = await fetch(`${supabaseUrl}/auth/v1/token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: supabaseAnonKey ?? "" },
-          body: JSON.stringify({ grant_type: "refresh_token", refresh_token: refreshToken }),
-        });
-        const tokenData = await tokenResp.json().catch(() => ({}));
-        if (tokenResp.ok && tokenData?.access_token) {
-          accessToken = tokenData.access_token;
-          const newRefresh = tokenData.refresh_token ?? refreshToken;
-          const expiresIn = Number(tokenData.expires_in) || 3600;
-          const newPayload = {
-            access_token: accessToken,
-            refresh_token: newRefresh,
-            expires_at: Date.now() + expiresIn * 1000,
-          };
-          const cookieValue = typeof globalThis.btoa === "function" ? globalThis.btoa(JSON.stringify(newPayload)) : Buffer.from(JSON.stringify(newPayload)).toString("base64");
-          const maxAge = SESSION_COOKIE_MAX_AGE;
-          const secure = process.env.NODE_ENV === "production";
-          const cookieParts = [
-            `semlox_session=${cookieValue}`,
-            `Path=/`,
-            `HttpOnly`,
-            `SameSite=Lax`,
-            `Max-Age=${maxAge}`,
-          ];
-          if (secure) cookieParts.push("Secure");
-
-          const res = NextResponse.next();
-          res.headers.set("Set-Cookie", cookieParts.join("; "));
-          return res;
-        }
-      } catch (e) {
-        // ignore and fallthrough to redirect
-      }
-    }
-
-    if (!accessToken) {
-      const loginUrl = new URL("/login", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    // Validate token with Supabase user endpoint
-    const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey ?? "" },
-    });
-    if (!userResp.ok) {
-      const loginUrl = new URL("/login", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    // Allow request
-    return NextResponse.next();
-  } catch (e) {
-    const loginUrl = new URL("/login", req.url);
+  if (isProtectedPage(request.nextUrl.pathname) && !user) {
+    const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
+
+  // API routes still perform their own 401 handling if unauthenticated;
+  // middleware's job here is only to keep the session cookie fresh for them.
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/awb/:path*", "/documents/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/api/:path*",
+  ],
 };

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return jsonResponse({ ok: false, code: "AUTH_SERVICE_ERROR", message: "Service unavailable" }, 500);
   }
 
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) {
     return jsonResponse({ ok: false, code: "UNAUTHORIZED", message: "Your session expired. Please sign in again." }, 401);
   }

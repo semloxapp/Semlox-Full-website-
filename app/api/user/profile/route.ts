@@ -51,7 +51,7 @@ function serviceHeaders() {
 }
 
 async function authenticate(request: Request) {
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return null;
   return await getUserFromAccessToken(token);
 }

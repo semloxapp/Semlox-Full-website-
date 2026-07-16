@@ -1,11 +1,49 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
+
+async function resolveMembershipsAndRedirect(router: ReturnType<typeof useRouter>) {
+  const mResp = await fetch("/api/auth/memberships", { credentials: "include" });
+  if (!mResp.ok) {
+    router.replace("/login");
+    return;
+  }
+  const j = await mResp.json().catch(() => ({}));
+  if (j?.ok === false) {
+    router.replace("/login");
+    return;
+  }
+  const memberships = j?.memberships || [];
+
+  const hasAccepted = Array.isArray(memberships) && memberships.some((m: any) => !!m.accepted_at);
+  if (hasAccepted) {
+    router.replace("/dashboard");
+    return;
+  }
+
+  const pending = Array.isArray(memberships) ? memberships.filter((m: any) => !m.accepted_at) : [];
+  if (pending.length === 1) {
+    const acceptResp = await fetch("/api/auth/accept-invite", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId: pending[0].company_id }),
+    });
+    const a = await acceptResp.json().catch(() => ({}));
+    if (acceptResp.ok && a?.ok !== false) {
+      router.replace("/dashboard");
+      return;
+    }
+  }
+
+  router.replace("/login");
+}
+
+type CallbackStage = "processing" | "set-password" | "error";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [passwordSetupToken, setPasswordSetupToken] = useState<string | null>(null);
+  const [stage, setStage] = useState<CallbackStage>("processing");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -17,91 +55,50 @@ export default function AuthCallbackPage() {
       try {
         const { hash, search } = window.location;
 
-        // If the legacy implicit flow returned tokens in the hash (#access_token=...)
+        // Legacy implicit/hash flow: #access_token=...&refresh_token=...&type=...
+        // Prefer configuring Supabase Auth email templates to use the PKCE
+        // (?code=) flow so this branch stops being reachable.
         if (hash && (hash.includes("access_token=") || hash.includes("refresh_token="))) {
           const params = new URLSearchParams(hash.replace(/^#/, ""));
           const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
           const flowType = params.get("type");
 
-          // Supabase invite/recovery links establish a temporary session that can
-          // set a password. Keep the token in memory only after cleaning the URL.
-          if (accessToken && (flowType === "invite" || flowType === "recovery")) {
-            const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
-            window.history.replaceState(null, "", cleanUrl);
-            setPasswordSetupToken(accessToken);
-            return;
-          }
-
-          if (accessToken) {
-            // Store only the access token in session storage (do not log it).
-            try {
-              sessionStorage.setItem("semlox_access_token", accessToken);
-            } catch (e) {
-              // ignore storage errors
-            }
-          }
-
-          // Immediately remove the hash from the URL to avoid leaking tokens.
           const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
           window.history.replaceState(null, "", cleanUrl);
 
-          // Decide where to redirect: check memberships server-side using existing API.
-          try {
-            const token = accessToken;
-            if (!token) {
-              router.replace("/login");
-              return;
-            }
-
-            const mResp = await fetch("/api/auth/memberships", { headers: { Authorization: `Bearer ${token}` } });
-            if (!mResp.ok) {
-              router.replace("/login");
-              return;
-            }
-            const j = await mResp.json().catch(() => ({}));
-            if (j?.ok === false) {
-              router.replace("/login");
-              return;
-            }
-            const memberships = j?.memberships || [];
-
-            // If any accepted membership exists, go to dashboard
-            const hasAccepted = Array.isArray(memberships) && memberships.some((m: any) => !!m.accepted_at);
-            if (hasAccepted) {
-              router.replace("/dashboard");
-              return;
-            }
-
-            // If there is exactly one pending invite, attempt to accept it server-side
-            const pending = Array.isArray(memberships) ? memberships.filter((m: any) => !m.accepted_at) : [];
-            if (pending.length === 1) {
-              const acceptResp = await fetch("/api/auth/accept-invite", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId: pending[0].company_id }),
-              });
-              const a = await acceptResp.json().catch(() => ({}));
-              if (acceptResp.ok && a?.ok !== false) {
-                router.replace("/dashboard");
-                return;
-              }
-            }
-
-            // Default: go to login so user can complete company selection.
-            router.replace("/login");
-            return;
-          } catch (e) {
+          if (!accessToken || !refreshToken) {
             router.replace("/login");
             return;
           }
+
+          // Establishes the same httpOnly cookie session /login and
+          // /exchange use — no token is ever kept in JS-reachable storage.
+          const setResp = await fetch("/api/auth/set-session", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+          });
+          if (!setResp.ok) {
+            router.replace("/login");
+            return;
+          }
+
+          if (flowType === "invite" || flowType === "recovery") {
+            setStage("set-password");
+            return;
+          }
+
+          await resolveMembershipsAndRedirect(router);
+          return;
         }
 
-        // If PKCE/code flow used and we have ?code= in query, exchange it server-side
+        // PKCE/code flow: ?code=...
         if (search && search.includes("code=")) {
           const u = new URL(window.location.href);
           const code = u.searchParams.get("code");
           const flowType = u.searchParams.get("type");
-          // Clear query params immediately from URL
           u.searchParams.delete("code");
           u.searchParams.delete("state");
           u.searchParams.delete("type");
@@ -112,83 +109,34 @@ export default function AuthCallbackPage() {
             return;
           }
 
-          try {
-            const exch = await fetch("/api/auth/exchange", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ code }),
-            });
-            if (!exch.ok) {
-              router.replace("/login");
-              return;
-            }
-            const payload = await exch.json().catch(() => ({}));
-            if (payload?.ok === false) {
-              router.replace("/login");
-              return;
-            }
-            const accessToken = payload?.access_token ?? payload?.session?.access_token ?? payload?.session?.accessToken ?? null;
-            if (!accessToken) {
-              router.replace("/login");
-              return;
-            }
-
-            if (flowType === "invite" || flowType === "recovery") {
-              setPasswordSetupToken(accessToken);
-              return;
-            }
-
-            try {
-              // set sessionStorage as a temporary client-side fallback; server cookie is primary
-              sessionStorage.setItem("semlox_access_token", accessToken);
-            } catch (e) {}
-
-            // After session set, reuse same membership resolution logic as hash flow
-            const mResp = await fetch("/api/auth/memberships", { headers: { Authorization: `Bearer ${accessToken}` } });
-            if (!mResp.ok) {
-              router.replace("/login");
-              return;
-            }
-            const j = await mResp.json().catch(() => ({}));
-            if (j?.ok === false) {
-              router.replace("/login");
-              return;
-            }
-            const memberships = j?.memberships || [];
-            const hasAccepted = Array.isArray(memberships) && memberships.some((m: any) => !!m.accepted_at);
-            if (hasAccepted) {
-              router.replace("/dashboard");
-              return;
-            }
-
-            const pending = Array.isArray(memberships) ? memberships.filter((m: any) => !m.accepted_at) : [];
-            if (pending.length === 1) {
-              const acceptResp = await fetch("/api/auth/accept-invite", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId: pending[0].company_id }),
-              });
-              const a = await acceptResp.json().catch(() => ({}));
-              if (acceptResp.ok && a?.ok !== false) {
-                router.replace("/dashboard");
-                return;
-              }
-            }
-
-            router.replace("/login");
-            return;
-          } catch (e) {
+          const exch = await fetch("/api/auth/exchange", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          if (!exch.ok) {
             router.replace("/login");
             return;
           }
+          const payload = await exch.json().catch(() => ({}));
+          if (payload?.ok === false) {
+            router.replace("/login");
+            return;
+          }
+
+          if (flowType === "invite" || flowType === "recovery") {
+            setStage("set-password");
+            return;
+          }
+
+          await resolveMembershipsAndRedirect(router);
+          return;
         }
 
-        // No tokens or code present - go to login.
         router.replace("/login");
       } catch (err) {
-        try {
-          router.replace("/login");
-        } catch (e) {}
+        setStage("error");
       }
     })();
   }, [router]);
@@ -202,57 +150,32 @@ export default function AuthCallbackPage() {
       setPasswordError("Password must be at least 8 characters.");
       return;
     }
-
     if (password !== confirmPassword) {
       setPasswordError("Passwords do not match.");
       return;
     }
 
-    if (!passwordSetupToken || !supabaseUrl || !supabaseAnonKey) {
-      setPasswordError("Password setup is unavailable. Please request a new invitation email.");
-      return;
-    }
-
     setPasswordLoading(true);
     try {
-      const updateResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        method: "PUT",
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${passwordSetupToken}`,
-          "Content-Type": "application/json",
-        },
+      // Uses the cookie session already established above — no access
+      // token is ever read into browser JS for this step.
+      const resp = await fetch("/api/auth/set-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
+      const body = await resp.json().catch(() => ({}));
 
-      const updateBody = await updateResp.json().catch(() => ({}));
-      if (!updateResp.ok) {
-        setPasswordError(updateBody?.message || updateBody?.msg || "Password could not be set. Please request a new invitation email.");
+      if (!resp.ok || body?.ok === false) {
+        setPasswordError(body?.message || "Password could not be set. Please request a new invitation email.");
         return;
       }
 
-      try {
-        const mResp = await fetch("/api/auth/memberships", { headers: { Authorization: `Bearer ${passwordSetupToken}` } });
-        if (mResp.ok) {
-          const j = await mResp.json().catch(() => ({}));
-          const memberships = j?.memberships || [];
-          const pending = Array.isArray(memberships) ? memberships.filter((m: any) => !m.accepted_at) : [];
-          if (pending.length === 1) {
-            await fetch("/api/auth/accept-invite", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${passwordSetupToken}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ companyId: pending[0].company_id }),
-            });
-          }
-        }
-      } catch (e) {
-        // Invite acceptance can be retried after login; password setup succeeded.
-      }
-
-      setPassword("");
-      setConfirmPassword("");
-      setPasswordMessage("Password set successfully. You can now sign in.");
-      window.setTimeout(() => router.replace("/login"), 1400);
+      // Password is set and the person already has an active session from
+      // the invite/recovery link, so accept any single pending invite and
+      // send them straight into the dashboard rather than back to /login.
+      await resolveMembershipsAndRedirect(router);
     } catch (e) {
       setPasswordError("Password could not be set. Please request a new invitation email.");
     } finally {
@@ -260,7 +183,7 @@ export default function AuthCallbackPage() {
     }
   }
 
-  if (passwordSetupToken) {
+  if (stage === "set-password") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#070B17] px-6 text-white">
         <form onSubmit={submitPassword} className="w-full max-w-[360px] rounded-[14px] border border-white/10 bg-white/[0.035] p-5 shadow-[0_20px_60px_rgba(0,0,0,.45)] backdrop-blur-xl">

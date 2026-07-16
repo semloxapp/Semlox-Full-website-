@@ -185,6 +185,26 @@ export default function SemloxLandingPage() {
           }
         }
 
+        @keyframes spin45 {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes nodeRing {
+          from {
+            opacity: 0.5;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(2.5);
+          }
+        }
+
         @keyframes pulseSoft {
           0%,
           100% {
@@ -209,8 +229,33 @@ export default function SemloxLandingPage() {
           animation: spin30Reverse 30s linear infinite;
         }
 
+        .animate-spin45 {
+          animation: spin45 45s linear infinite;
+        }
+
+        .animate-nodeRing::after {
+          animation: nodeRing 2s ease-out infinite;
+        }
+
         .animate-pulseSoft {
           animation: pulseSoft 2s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .animate-ticker,
+          .animate-spin20,
+          .animate-spin30Reverse,
+          .animate-spin45,
+          .animate-pulseSoft,
+          .animate-nodeRing::after {
+            animation-play-state: paused !important;
+          }
+
+          .fade-up {
+            opacity: 1 !important;
+            transform: none !important;
+            transition: none !important;
+          }
         }
       `}</style>
     </main>
@@ -365,8 +410,8 @@ function Navbar({ menuOpen, setMenuOpen }: { menuOpen: boolean; setMenuOpen: (v:
 
 function Hero() {
   return (
-    <section id="hero" className="relative flex min-h-screen items-center overflow-hidden px-4 pb-16 pt-24 sm:px-6 lg:px-10 before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_80%_60%_at_70%_40%,rgba(6,182,212,0.08)_0%,transparent_60%)] after:absolute after:inset-0 after:bg-[radial-gradient(ellipse_60%_50%_at_20%_60%,rgba(59,130,246,0.07)_0%,transparent_60%)]">
-      <div className="relative z-[1] mx-auto grid w-full max-w-[1440px] grid-cols-2 items-center gap-10 max-md:grid-cols-1 lg:gap-16">
+    <section id="hero" className="relative flex min-h-[calc(100svh-58px)] items-center px-4 pb-10 pt-[82px] sm:px-6 lg:px-10 lg:pb-8 before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_80%_60%_at_70%_40%,rgba(6,182,212,0.08)_0%,transparent_60%)] after:absolute after:inset-0 after:bg-[radial-gradient(ellipse_60%_50%_at_20%_60%,rgba(59,130,246,0.07)_0%,transparent_60%)]">
+      <div className="relative z-[1] mx-auto grid w-full max-w-[1400px] grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-10 xl:gap-16">
         {/* <div>
           <div className="fade-up visible inline-flex translate-y-0 items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.05] px-3.5 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.15em] text-[#06b6d4] opacity-100">
             <span className="h-1 w-1 animate-pulseSoft rounded-full bg-[#06b6d4]" /> Now in Enterprise Beta
@@ -395,14 +440,14 @@ function Hero() {
             ))}
           </div>
         </div> */}
-        <div className="max-w-[620px] md:pl-4 lg:pl-8">
+        <div className="w-full max-w-[640px] lg:justify-self-end">
 
   <div className="fade-up visible inline-flex translate-y-0 items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.05] px-3 py-1 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-[#06b6d4] opacity-100">
     <span className="h-1 w-1 animate-pulseSoft rounded-full bg-[#06b6d4]" />
     Now in Enterprise Beta
   </div>
 
-  <h1 className="fade-up visible mt-5 translate-y-0 text-[clamp(2rem,4vw,3.2rem)] font-bold leading-[1.08] tracking-[-0.03em] opacity-100">
+  <h1 className="fade-up visible mt-5 translate-y-0 text-[34px] font-bold leading-[1.08] tracking-[-0.03em] opacity-100 sm:text-[40px] lg:text-[46px] xl:text-[52px]">
     <span className="bg-gradient-to-br from-white from-[30%] to-[#06b6d4] bg-clip-text text-transparent">
       The Intelligence Layer
     </span>
@@ -410,27 +455,27 @@ function Hero() {
     for Global Logistics.
   </h1>
 
-  <p className="fade-up visible mt-5 max-w-[560px] translate-y-0 text-[1rem] leading-[1.65] text-[#64748b] opacity-100 [transition-delay:0.1s]">
+  <p className="fade-up visible mt-5 max-w-[600px] translate-y-0 text-[15px] leading-[1.65] text-[#64748b] opacity-100 [transition-delay:0.1s] xl:text-[16px]">
     SemloX fuses AI document processing, predictive routing, and real-time supply chain visibility into a single operational command layer — built for enterprises moving at the speed of trade.
   </p>
 
   <div className="fade-up visible mt-8 flex translate-y-0 flex-wrap items-center gap-3 opacity-100 [transition-delay:0.2s]">
     <a
       href="#"
-      className="inline-flex items-center gap-2 rounded-[8px] bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] px-5 py-3 font-grotesk text-[0.9rem] font-semibold text-white no-underline transition hover:-translate-y-px hover:shadow-[0_8px_30px_rgba(59,130,246,0.3)]"
+      className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] px-5 font-grotesk text-[14px] font-semibold text-white no-underline transition hover:-translate-y-px hover:shadow-[0_8px_30px_rgba(59,130,246,0.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
     >
       Start Free Trial →
     </a>
 
     <a
       href="#engine"
-      className="inline-flex items-center gap-2 rounded-[8px] border border-white/[0.07] bg-transparent px-5 py-3 font-grotesk text-[0.9rem] font-medium text-[#e2e8f0] no-underline transition hover:border-white/20 hover:bg-white/[0.04]"
+      className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-white/[0.07] bg-transparent px-5 font-grotesk text-[14px] font-medium text-[#e2e8f0] no-underline transition hover:border-white/20 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
     >
       ▶ See the Engine
     </a>
   </div>
 
-  <div className="fade-up visible mt-10 flex translate-y-0 gap-6 border-t border-white/[0.07] pt-6 opacity-100 [transition-delay:0.3s]">
+  <div className="fade-up visible mt-10 grid translate-y-0 grid-cols-2 gap-x-6 gap-y-4 border-t border-white/[0.07] pt-6 opacity-100 [transition-delay:0.3s] sm:grid-cols-4">
     {stats.map(([num, label]) => (
       <div key={label}>
         <div className="bg-gradient-to-br from-[#e2e8f0] to-[#06b6d4] bg-clip-text text-[1.35rem] font-bold text-transparent">
@@ -453,8 +498,8 @@ function Hero() {
 
 function HeroGlobe() {
   return (
-    <div className="flex items-center justify-center max-md:hidden">
-      <div className="relative h-[min(42vw,480px)] w-[min(42vw,480px)] min-h-[360px] min-w-[360px]">
+    <div className="flex min-w-0 items-center justify-center overflow-visible max-md:hidden lg:justify-self-stretch">
+      <div className="relative aspect-square w-full max-w-[620px] overflow-visible lg:max-w-[560px] xl:max-w-[620px]">
         <div className="absolute inset-0 animate-spin20 rounded-full border border-dashed border-cyan-500/20" />
         <div className="absolute inset-[30px] animate-spin30Reverse rounded-full border border-blue-500/15" />
         <div className="absolute inset-[60px] animate-spin45 rounded-full border border-orange-500/10" />
@@ -468,7 +513,7 @@ function HeroGlobe() {
           />
         ))}
 
-        <svg className="absolute inset-0 h-full w-full opacity-30" viewBox="0 0 520 520">
+        <svg className="absolute inset-0 h-full w-full opacity-30" viewBox="0 0 520 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
           <line x1="270" y1="62" x2="406" y2="166" stroke="#06b6d4" strokeWidth="1" strokeDasharray="4 4" />
           <line x1="406" y1="166" x2="426" y2="322" stroke="#3b82f6" strokeWidth="1" strokeDasharray="4 4" />
           <line x1="426" y1="322" x2="286" y2="406" stroke="#00d4aa" strokeWidth="1" strokeDasharray="4 4" />

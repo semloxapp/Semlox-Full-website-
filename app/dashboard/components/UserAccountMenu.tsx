@@ -16,8 +16,10 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCompany } from "../../context/CompanyContext";
+import { useUserProfile } from "../../hooks/queries/useUserProfile";
 
 type UserMenuProfile = {
   full_name: string;
@@ -69,45 +71,19 @@ function formatRole(value: string) {
 
 export default function UserAccountMenu({ theme }: { theme: "light" | "dark" }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { selectedCompanyId } = useCompany();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
-  const [error, setError] = useState("");
-  const [profile, setProfile] = useState<UserMenuProfile>(emptyProfile);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadProfile() {
-      setLoading(true);
-      setError("");
-      try {
-        const query = selectedCompanyId ? `?companyId=${encodeURIComponent(selectedCompanyId)}` : "";
-        const response = await fetch(`/api/user/profile${query}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!active) return;
-        if (!response.ok || payload?.ok === false) {
-          setError(payload?.message || "Unable to load account details.");
-          return;
-        }
-        setProfile({ ...emptyProfile, ...(payload?.data || {}), workspace: payload?.data?.workspace || null });
-      } catch {
-        if (active) setError("Unable to load account details.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    loadProfile();
-    return () => {
-      active = false;
-    };
-  }, [selectedCompanyId]);
+  const [actionError, setActionError] = useState("");
+  const profileQuery = useUserProfile(selectedCompanyId);
+  const profile = useMemo(
+    () => ({ ...emptyProfile, ...(profileQuery.data || {}), workspace: profileQuery.data?.workspace || null }),
+    [profileQuery.data]
+  );
+  const loading = profileQuery.isPending;
+  const error = actionError || profileQuery.error?.message || "";
 
   useEffect(() => {
     function closeOutside(event: MouseEvent) {
@@ -137,7 +113,7 @@ export default function UserAccountMenu({ theme }: { theme: "light" | "dark" }) 
 
   async function signOut() {
     setSigningOut(true);
-    setError("");
+    setActionError("");
     try {
       const response = await fetch("/api/auth/signout", {
         method: "POST",
@@ -145,7 +121,7 @@ export default function UserAccountMenu({ theme }: { theme: "light" | "dark" }) 
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.ok === false) {
-        setError("Unable to sign out. Please try again.");
+        setActionError("Unable to sign out. Please try again.");
         return;
       }
       try {
@@ -156,11 +132,12 @@ export default function UserAccountMenu({ theme }: { theme: "light" | "dark" }) 
       } catch {
         // Ignore browser storage errors after the server cookie is cleared.
       }
+      queryClient.clear();
       setOpen(false);
       router.replace("/login");
       router.refresh();
     } catch {
-      setError("Unable to sign out. Please try again.");
+      setActionError("Unable to sign out. Please try again.");
     } finally {
       setSigningOut(false);
     }

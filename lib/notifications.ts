@@ -141,7 +141,7 @@ async function getPreferences(userId: string) {
 
 export async function getNotificationContext(request: Request): Promise<NotificationContext | null> {
   if (!supabaseUrl || !supabaseServiceRoleKey) return null;
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return null;
   const user = await getUserFromAccessToken(token);
   if (!user?.id) return null;

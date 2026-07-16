@@ -19,65 +19,25 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useCompany } from "../context/CompanyContext";
-import { fetchMemberships } from "../utils/authClient";
+import {
+  type DashboardData,
+  type DashboardDocument,
+  type DashboardRange as Range,
+  type DashboardScope as Scope,
+  useDashboardData,
+} from "../hooks/queries/useDashboardData";
+import { membershipErrorStatus, useMemberships } from "../hooks/queries/useMemberships";
+import { getAcceptedMemberships } from "../utils/membership";
+import { Badge, type BadgeProps } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Select } from "../components/ui/Select";
 import {
   DashboardLineChart,
   DashboardStatusDonut,
   TeamActivityBarChart,
 } from "./components/DashboardCharts";
-
-type Scope = "user" | "company";
-type Range = "7d" | "30d" | "90d";
-type DashboardDocument = {
-  documentId: string;
-  awbNumber: string;
-  fileName: string;
-  processedBy: string;
-  status: string;
-  fields: { total: number; captured: number; warnings: number; corrected: number };
-  updatedAt: string;
-};
-type Activity = {
-  id: string;
-  documentId: string | null;
-  type: string;
-  title: string;
-  message: string | null;
-  createdAt: string;
-  user: string;
-};
-type TeamRow = {
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  uploaded: number;
-  drafts: number;
-  issued: number;
-  failed: number;
-  fieldsCorrected: number;
-  lastActive: string | null;
-};
-type DashboardData = {
-  scope: Scope;
-  range: Range;
-  role: string;
-  canViewCompanyDashboard?: boolean;
-  stats: Record<string, number>;
-  trend: Array<Record<string, string | number>>;
-  statusSplit: Array<{ name: string; value: number; color: string }>;
-  pendingWork?: DashboardDocument[];
-  recentActivity?: Activity[];
-  teamActivity?: TeamRow[];
-  activeDocuments?: DashboardDocument[];
-  exceptions?: DashboardDocument[];
-};
-
-function responseMessage(payload: unknown, fallback: string) {
-  if (!payload || typeof payload !== "object") return fallback;
-  const message = (payload as Record<string, unknown>).message;
-  return typeof message === "string" && message ? message : fallback;
-}
 
 function formatDuration(milliseconds: number) {
   if (!milliseconds) return "0s";
@@ -90,13 +50,13 @@ function percentage(value: number) {
   return `${Math.round((value || 0) * 100)}%`;
 }
 
-function statusClass(status: string) {
+function statusVariant(status: string): BadgeProps["variant"] {
   if (status === "issued" || status === "ready_to_issue") {
-    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-300";
+    return "success";
   }
-  if (status === "failed") return "border-red-400/25 bg-red-400/10 text-red-300";
-  if (status === "draft") return "border-amber-400/25 bg-amber-400/10 text-amber-300";
-  return "border-orange-400/25 bg-orange-400/10 text-orange-300";
+  if (status === "failed") return "danger";
+  if (status === "draft") return "neutral";
+  return "warning";
 }
 
 function DashboardCard({
@@ -115,19 +75,19 @@ function DashboardCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="dashboard-card relative overflow-hidden rounded-[10px] border border-white/[0.08] bg-white/[0.025] p-4">
+    <Card className="dashboard-card relative overflow-hidden p-4">
       <div className={`absolute inset-x-0 top-0 h-0.5 ${color}`} />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="dashboard-kpi-label text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">{label}</div>
-          <div className={`dashboard-kpi-value mt-2 font-mono text-[25px] font-bold ${valueClassName}`}>{value}</div>
-          <div className="dashboard-kpi-detail mt-1 text-[10px] leading-4 text-[#64748b]">{detail}</div>
+          <div className="semlox-kpi-label dashboard-kpi-label uppercase tracking-[0.08em]">{label}</div>
+          <div className={`semlox-kpi-value dashboard-kpi-value mt-2 ${valueClassName}`}>{value}</div>
+          <div className="semlox-kpi-description dashboard-kpi-detail mt-1">{detail}</div>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-white/[0.04] text-[#60a5fa]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[var(--semlox-radius-control)] bg-white/[0.04] text-[#60a5fa]">
           {icon}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -141,13 +101,13 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="dashboard-panel overflow-hidden rounded-[10px] border border-white/[0.08] bg-white/[0.025]">
+    <Card className="dashboard-panel overflow-hidden">
       <div className="border-b border-white/[0.08] px-4 py-3">
-        <h2 className="text-[13px] font-extrabold text-white">{title}</h2>
-        {subtitle ? <p className="dashboard-panel-subtitle mt-0.5 text-[10px] leading-4 text-[#64748b]">{subtitle}</p> : null}
+        <h2 className="semlox-section-title">{title}</h2>
+        {subtitle ? <p className="semlox-body dashboard-panel-subtitle mt-0.5">{subtitle}</p> : null}
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -170,15 +130,15 @@ function AnalyticsMetricBody({
         {metrics.map((metric) => (
           <div
             key={metric.label}
-            className={`dashboard-soft-metric-block grid h-[126px] grid-rows-[16px_34px_1fr] content-start rounded-[9px] border px-4 py-3 shadow-[0_6px_18px_rgba(0,0,0,0.06)] ${metric.blockClassName}`}
+            className={`dashboard-soft-metric-block grid h-[126px] grid-rows-[16px_34px_1fr] content-start rounded-[var(--semlox-radius-control)] border px-4 py-3 shadow-[0_6px_18px_rgba(0,0,0,0.06)] ${metric.blockClassName}`}
           >
-            <div className="dashboard-analytics-metric-label truncate text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-[#94a3b8]">
+            <div className="semlox-label dashboard-analytics-metric-label truncate uppercase tracking-[0.06em]">
               {metric.label}
             </div>
-            <div className={`dashboard-analytics-metric-value self-center font-mono text-[28px] font-extrabold leading-none ${metric.valueClassName}`}>
+            <div className={`semlox-kpi-value dashboard-analytics-metric-value self-center ${metric.valueClassName}`}>
               {metric.value}
             </div>
-            <p className="dashboard-analytics-metric-description line-clamp-2 self-end text-[10px] leading-4 text-[#94a3b8]">
+            <p className="semlox-metadata dashboard-analytics-metric-description line-clamp-2 self-end">
               {metric.description}
             </p>
           </div>
@@ -224,9 +184,9 @@ function CompletionRatio({
       ]}
       footer={
         <div>
-          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold">
-            <span className="text-[#94a3b8]">Completion rate</span>
-            <span className="font-mono text-white">{completedPercent}%</span>
+          <div className="semlox-table-body mb-2 flex items-center justify-between">
+            <span>Completion rate</span>
+            <span className="semlox-identifier">{completedPercent}%</span>
           </div>
           <div className="dashboard-ratio-track flex h-2 overflow-hidden rounded-full bg-white/[0.08]">
             <div
@@ -264,23 +224,23 @@ function DocumentsTable({
       <div className="overflow-x-auto">
         <table className="dashboard-documents-table w-full min-w-[760px] border-collapse">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-[#94a3b8]">
+            <tr className="semlox-table-header text-left uppercase tracking-[0.08em]">
               {["AWB Number", "File Name", ...(company ? ["Processed By"] : []), "Status", "Fields", "Updated", "Action"].map((label) => (
-                <th key={label} className="border-b border-white/[0.08] px-4 py-2.5 font-bold">{label}</th>
+                <th key={label} className="border-b border-white/[0.08] px-4 py-2.5">{label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {visibleDocuments.map((document) => (
               <tr key={document.documentId} className="hover:bg-white/[0.025]">
-                <td className="dashboard-table-awb border-b border-white/[0.05] px-4 py-2.5 font-mono text-[12px] font-extrabold text-white">{document.awbNumber}</td>
-                <td className="dashboard-table-file border-b border-white/[0.05] px-4 py-2.5 text-[12px] font-medium text-[#dbe4f0]">{document.fileName}</td>
-                {company ? <td className="dashboard-table-file border-b border-white/[0.05] px-4 py-2.5 text-[12px] font-medium text-[#dbe4f0]">{document.processedBy}</td> : null}
-                <td className="border-b border-white/[0.05] px-4 py-2.5"><span className={`rounded-full border px-2 py-1 text-[9px] font-bold ${statusClass(document.status)}`}>{document.status.replaceAll("_", " ")}</span></td>
-                <td className="dashboard-table-fields border-b border-white/[0.05] px-4 py-2.5 font-mono text-[11px] font-semibold text-[#b5c2d4]">{document.fields.captured}/{document.fields.total}</td>
-                <td className="dashboard-table-updated border-b border-white/[0.05] px-4 py-2.5 text-[11px] font-medium text-[#94a3b8]">{formatDistanceToNow(new Date(document.updatedAt), { addSuffix: true })}</td>
+                <td className="semlox-identifier dashboard-table-awb border-b border-white/[0.05] px-4 py-2.5 font-mono">{document.awbNumber}</td>
+                <td className="semlox-table-body dashboard-table-file border-b border-white/[0.05] px-4 py-2.5">{document.fileName}</td>
+                {company ? <td className="semlox-table-body dashboard-table-file border-b border-white/[0.05] px-4 py-2.5">{document.processedBy}</td> : null}
+                <td className="border-b border-white/[0.05] px-4 py-2.5"><Badge variant={statusVariant(document.status)}>{document.status.replaceAll("_", " ")}</Badge></td>
+                <td className="semlox-table-body dashboard-table-fields border-b border-white/[0.05] px-4 py-2.5">{document.fields.captured}/{document.fields.total}</td>
+                <td className="semlox-metadata dashboard-table-updated border-b border-white/[0.05] px-4 py-2.5">{formatDistanceToNow(new Date(document.updatedAt), { addSuffix: true })}</td>
                 <td className="border-b border-white/[0.05] px-4 py-2.5">
-                  <Link href={`/dashboard/awb?documentId=${document.documentId}`} className="primary-blue-action inline-flex h-7 items-center rounded-[6px] bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-3 text-[10px] font-semibold text-white shadow-[0_6px_14px_rgba(47,128,255,0.22)] transition hover:scale-[1.01] hover:brightness-110 hover:shadow-md">
+                  <Link href={`/dashboard/awb?documentId=${document.documentId}`} className="semlox-compact-action h-7">
                     {document.status === "draft" ? "Open Draft" : "Continue Review"}
                   </Link>
                 </td>
@@ -292,31 +252,33 @@ function DocumentsTable({
 
       {totalPages > 1 ? (
         <div className="dashboard-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] px-4 py-2.5">
-          <p className="text-[11px] font-medium text-[#94a3b8]">
+          <p className="semlox-table-body">
             Showing {firstRowIndex + 1}-{Math.min(firstRowIndex + pageSize, documents.length)} of {documents.length}
           </p>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
               disabled={activePage === 1}
-              className="dashboard-pagination-button inline-flex h-8 items-center gap-1 rounded-[6px] border border-white/10 px-3 text-[11px] font-semibold text-[#cbd5e1] hover:bg-white/[0.06] disabled:opacity-40"
+              size="compact"
+              className="dashboard-pagination-button gap-1"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Previous
-            </button>
-            <span className="min-w-[72px] text-center text-[11px] font-semibold text-[#94a3b8]">
+            </Button>
+            <span className="semlox-table-body min-w-[72px] text-center">
               Page {activePage} of {totalPages}
             </span>
-            <button
+            <Button
               type="button"
               onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}
               disabled={activePage === totalPages}
-              className="dashboard-pagination-button inline-flex h-8 items-center gap-1 rounded-[6px] border border-white/10 px-3 text-[11px] font-semibold text-[#cbd5e1] hover:bg-white/[0.06] disabled:opacity-40"
+              size="compact"
+              className="dashboard-pagination-button gap-1"
             >
               Next
               <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -326,7 +288,7 @@ function DocumentsTable({
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-40 items-center justify-center text-[11px] text-[#64748b]">
+    <div className="semlox-body flex min-h-40 items-center justify-center">
       {message}
     </div>
   );
@@ -340,10 +302,12 @@ export default function DashboardPage() {
   const [initializationError, setInitializationError] = useState("");
   const [scope, setScope] = useState<Scope>("user");
   const [range, setRange] = useState<Range>("30d");
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const membershipsQuery = useMemberships();
+  const dashboardQuery = useDashboardData(scope, selectedCompanyId, range, {
+    enabled: allowed,
+  });
+  const data = dashboardQuery.data;
+  const dashboardError = dashboardQuery.error;
 
   useEffect(() => {
     selectedCompanyIdRef.current = selectedCompanyId;
@@ -351,28 +315,27 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    let mounted = true;
-    void fetchMemberships().then((result) => {
-      if (!mounted) return;
-      if (!result.ok) {
-        if (result.status === 401 || result.status === 403) router.replace("/login");
+    if (membershipsQuery.isPending) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (membershipsQuery.isError) {
+        const status = membershipErrorStatus(membershipsQuery.error);
+        if (status === 401 || status === 403) router.replace("/login");
         else {
           setInitializationError("Unable to load your company memberships.");
-          setLoading(false);
         }
         return;
       }
-      const accepted = (result.memberships || []).filter(
-        (membership: { accepted_at?: string | null }) => membership.accepted_at
-      );
+
+      const accepted = getAcceptedMemberships(membershipsQuery.data);
       if (!accepted.length) {
         setInitializationError("No active company membership was found for this account.");
-        setLoading(false);
         return;
       }
       const currentCompanyId = selectedCompanyIdRef.current;
       const currentCompanyIsValid = accepted.some(
-        (membership: { company_id: string }) => membership.company_id === currentCompanyId
+        (membership) => membership.company_id === currentCompanyId
       );
       if (!currentCompanyIsValid) {
         setSelectedCompanyId(accepted[0].company_id, true);
@@ -381,49 +344,19 @@ export default function DashboardPage() {
       setAllowed(true);
     });
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [isHydrated, router, setSelectedCompanyId]);
+  }, [
+    isHydrated,
+    membershipsQuery.data,
+    membershipsQuery.error,
+    membershipsQuery.isError,
+    membershipsQuery.isPending,
+    router,
+    setSelectedCompanyId,
+  ]);
 
-  useEffect(() => {
-    if (!allowed || !selectedCompanyId) return;
-    const companyId = selectedCompanyId;
-    const controller = new AbortController();
-
-    async function fetchDashboard() {
-      try {
-        const response = await fetch(
-          `/api/dashboard/${scope}?companyId=${encodeURIComponent(companyId)}&range=${range}`,
-          { credentials: "include", signal: controller.signal }
-        );
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload?.ok === false) {
-          throw new Error(responseMessage(payload, "Unable to load dashboard."));
-        }
-        if (!controller.signal.aborted) {
-          setData(payload.data as DashboardData);
-          setError("");
-        }
-      } catch (loadError) {
-        if (!controller.signal.aborted) {
-          setData(null);
-          setError(loadError instanceof Error ? loadError.message : "Unable to load dashboard.");
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-
-    void fetchDashboard();
-    return () => controller.abort();
-  }, [allowed, range, refreshKey, scope, selectedCompanyId]);
-
-  function beginReload() {
-    setLoading(true);
-    setError("");
-  }
-
-  if ((!isHydrated || !allowed || loading) && !initializationError) {
+  if ((!isHydrated || !allowed || dashboardQuery.isPending) && !initializationError) {
     return (
       <main className="flex h-full items-center justify-center bg-[#04060f]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#2f80ff]" />
@@ -431,12 +364,12 @@ export default function DashboardPage() {
     );
   }
 
-  if (initializationError || error || !data) {
+  if (initializationError || dashboardError || !data) {
     return (
       <main className="flex h-full items-center justify-center bg-[#04060f] px-4 text-center">
         <div>
-          <div className="text-[13px] font-semibold text-red-300">{initializationError || error || "No dashboard data yet."}</div>
-          {!initializationError ? <button type="button" onClick={() => { beginReload(); setRefreshKey((value) => value + 1); }} className="mt-4 rounded-[7px] bg-[#2f80ff] px-4 py-2 text-[11px] font-bold text-white">Retry</button> : null}
+          <div className="semlox-section-title text-red-300">{initializationError || dashboardError?.message || "No dashboard data yet."}</div>
+          {!initializationError ? <Button variant="solid" size="compact" onClick={() => void dashboardQuery.refetch()} className="mt-4 px-4">Retry</Button> : null}
         </div>
       </main>
     );
@@ -468,27 +401,33 @@ export default function DashboardPage() {
   return (
     <main className="dashboard-real h-full overflow-y-auto bg-[#04060f] px-5 py-4 text-white">
       <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-[22px] font-extrabold">{company ? "Company AWB Overview" : "My AWB Overview"}</h1>
-            <p className="mt-1 text-[12px] leading-5 text-[#64748b]">{company ? "Company-wide AWB processing performance and team workload" : "What needs your attention and what you completed"}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <PageHeader
+          title={company ? "Company AWB Overview" : "My AWB Overview"}
+          description={company ? "Company-wide AWB processing performance and team workload" : "What needs your attention and what you completed"}
+          actions={
+            <>
             {data.canViewCompanyDashboard || company ? (
-              <div className="inline-flex rounded-[7px] border border-white/[0.08] bg-white/[0.025] p-1">
-                <button type="button" onClick={() => { if (scope !== "user") { beginReload(); setScope("user"); } }} className={`h-7 rounded-[5px] px-3 text-[10px] font-bold ${scope === "user" ? "bg-[#2f80ff] text-white" : "text-[#64748b]"}`}>My Overview</button>
-                <button type="button" onClick={() => { if (scope !== "company") { beginReload(); setScope("company"); } }} className={`h-7 rounded-[5px] px-3 text-[10px] font-bold ${scope === "company" ? "bg-[#2f80ff] text-white" : "text-[#64748b]"}`}>Company Overview</button>
+              <div className="inline-flex rounded-[var(--semlox-radius-control)] border border-white/[0.08] bg-white/[0.025] p-1">
+                <Button variant={scope === "user" ? "solid" : "ghost"} size="toggle" onClick={() => { if (scope !== "user") setScope("user"); }}>My Overview</Button>
+                <Button variant={scope === "company" ? "solid" : "ghost"} size="toggle" onClick={() => { if (scope !== "company") setScope("company"); }}>Company Overview</Button>
               </div>
             ) : null}
-            <select value={range} onChange={(event) => { beginReload(); setRange(event.target.value as Range); }} className="h-9 rounded-[7px] border border-white/10 bg-[#0b1220] px-3 text-[11px] font-semibold text-[#cbd5e1]">
+            <Select value={range} onChange={(event) => setRange(event.target.value as Range)} aria-label="Dashboard date range">
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
               <option value="90d">Last 90 days</option>
-            </select>
-            <button type="button" onClick={() => { beginReload(); setRefreshKey((value) => value + 1); }} className="flex h-9 items-center gap-2 rounded-[7px] border border-white/10 px-3 text-[11px] font-semibold text-[#94a3b8]"><RefreshCw className="h-3.5 w-3.5" />Refresh</button>
-            <Link href="/dashboard/awb" className="flex h-9 items-center gap-2 rounded-[7px] bg-gradient-to-r from-[#2f80ff] to-[#00b8e6] px-4 text-[11px] font-bold text-white"><Upload className="h-3.5 w-3.5" />Upload New AWB</Link>
-          </div>
-        </div>
+            </Select>
+            <Button onClick={() => void dashboardQuery.refetch()} disabled={dashboardQuery.isFetching}>
+              <RefreshCw className={dashboardQuery.isFetching ? "animate-spin" : ""} />
+              {dashboardQuery.isFetching ? "Refreshing..." : "Refresh"}
+            </Button>
+            <Button variant="primary" size="large" className="px-4" onClick={() => router.push("/dashboard/awb")}>
+              <Upload />
+              Upload New AWB
+            </Button>
+            </>
+          }
+        />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{topCards.map((card) => <DashboardCard key={card.label} {...card} />)}</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{secondaryCards.map((card) => <DashboardCard key={card.label} {...card} />)}</div>
@@ -498,7 +437,7 @@ export default function DashboardPage() {
             <Panel title="Team Activity" subtitle="Uploaded, issued, and draft AWBs by user"><div className="p-3"><TeamActivityBarChart data={(data.teamActivity || []) as unknown as Array<Record<string, string | number | null>>} /></div></Panel>
             <Panel title="Team Activity Details" subtitle="Real company processing totals by accepted member">
               {!data.teamActivity?.length ? <EmptyState message="No team activity yet." /> : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[860px] border-collapse"><thead><tr className="text-left text-[8px] uppercase text-[#64748b]">{["User","Role","Uploaded","Issued","Drafts","Failed","Fields Corrected","Last Active"].map((label)=><th key={label} className="border-b border-white/[0.08] px-4 py-2.5">{label}</th>)}</tr></thead><tbody>{data.teamActivity.map((row)=><tr key={row.userId} className="hover:bg-white/[0.025]"><td className="border-b border-white/[0.05] px-4 py-3"><div className="text-[10px] font-bold text-white">{row.name}</div><div className="text-[8px] text-[#64748b]">{row.email}</div></td><td className="border-b border-white/[0.05] px-4 py-3 text-[10px] text-[#94a3b8]">{row.role}</td>{[row.uploaded,row.issued,row.drafts,row.failed,row.fieldsCorrected].map((value,index)=><td key={index} className="border-b border-white/[0.05] px-4 py-3 font-mono text-[10px] text-[#cbd5e1]">{value}</td>)}<td className="border-b border-white/[0.05] px-4 py-3 text-[9px] text-[#64748b]">{row.lastActive ? formatDistanceToNow(new Date(row.lastActive), { addSuffix: true }) : "No activity"}</td></tr>)}</tbody></table></div>
+                <div className="overflow-x-auto"><table className="semlox-table-body w-full min-w-[860px] border-collapse"><thead><tr className="semlox-table-header text-left uppercase">{["User","Role","Uploaded","Issued","Drafts","Failed","Fields Corrected","Last Active"].map((label)=><th key={label} className="border-b border-white/[0.08] px-4 py-2.5">{label}</th>)}</tr></thead><tbody>{data.teamActivity.map((row)=><tr key={row.userId} className="hover:bg-white/[0.025]"><td className="border-b border-white/[0.05] px-4 py-3"><div className="semlox-identifier">{row.name}</div><div className="semlox-metadata">{row.email}</div></td><td className="semlox-table-body border-b border-white/[0.05] px-4 py-3">{row.role}</td>{[row.uploaded,row.issued,row.drafts,row.failed,row.fieldsCorrected].map((value,index)=><td key={index} className="semlox-table-body border-b border-white/[0.05] px-4 py-3">{value}</td>)}<td className="semlox-metadata border-b border-white/[0.05] px-4 py-3">{row.lastActive ? formatDistanceToNow(new Date(row.lastActive), { addSuffix: true }) : "No activity"}</td></tr>)}</tbody></table></div>
               )}
             </Panel>
           </>
@@ -506,7 +445,7 @@ export default function DashboardPage() {
 
         {company ? (
           <Panel title="Recent Exceptions" subtitle="Failures and documents with elevated review needs">
-            {!data.exceptions?.length ? <EmptyState message="No recent exceptions." /> : <div className="divide-y divide-white/[0.06]">{data.exceptions.map((item)=><Link key={item.documentId} href={`/dashboard/awb?documentId=${item.documentId}`} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.025]"><AlertTriangle className="h-4 w-4 text-amber-300" /><div className="min-w-0 flex-1"><div className="truncate text-[10px] font-bold text-white">{item.awbNumber}</div><div className="mt-0.5 truncate text-[9px] text-[#64748b]">{item.fileName} / {item.status.replaceAll("_"," ")}</div></div><span className="font-mono text-[9px] text-[#94a3b8]">{item.fields.warnings} flagged</span></Link>)}</div>}
+            {!data.exceptions?.length ? <EmptyState message="No recent exceptions." /> : <div className="divide-y divide-white/[0.06]">{data.exceptions.map((item)=><Link key={item.documentId} href={`/dashboard/awb?documentId=${item.documentId}`} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.025]"><AlertTriangle className="h-4 w-4 text-amber-300" /><div className="min-w-0 flex-1"><div className="semlox-identifier truncate">{item.awbNumber}</div><div className="semlox-metadata mt-0.5 truncate">{item.fileName} / {item.status.replaceAll("_"," ")}</div></div><span className="semlox-metadata">{item.fields.warnings} flagged</span></Link>)}</div>}
           </Panel>
         ) : null}
 
@@ -540,7 +479,7 @@ export default function DashboardPage() {
                   },
                 ]}
                 footer={
-                  <p className="text-[11px] font-medium text-[#94a3b8]">
+                  <p className="semlox-table-body">
                     Confidence and human correction are tracked independently.
                   </p>
                 }
@@ -558,32 +497,9 @@ export default function DashboardPage() {
       </div>
       <style jsx global>{`
         .dashboard-theme-light .dashboard-real { background: #f4f7fb !important; color: #0f172a !important; }
-        .dashboard-theme-light .dashboard-real .dashboard-card,
-        .dashboard-theme-light .dashboard-real .dashboard-panel { background: #ffffff !important; border-color: #d5deea !important; }
-        .dashboard-theme-light .dashboard-real [class*="text-white"] { color: #0f172a !important; }
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"]).primary-blue-action,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="bg-[#2f80ff]"],
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-[#2f80ff]"],
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-[#3b82f6]"],
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-blue-"],
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="bg-blue-"] {
-          color: #ffffff !important;
-        }
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"]).primary-blue-action svg,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="bg-[#2f80ff]"] svg,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-[#2f80ff]"] svg,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-[#3b82f6]"] svg,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="from-blue-"] svg,
-        .dashboard-theme-light .dashboard-real :is(button, a, [role="button"])[class*="bg-blue-"] svg {
-          color: #ffffff !important;
-        }
         .dashboard-theme-light .dashboard-real [class*="border-white"] { border-color: #d5deea !important; }
-        .dashboard-theme-light .dashboard-real select { background: #ffffff !important; color: #334155 !important; border-color: #b9c6d8 !important; }
         .dashboard-real .dashboard-card { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16); }
         .dashboard-theme-light .dashboard-real .dashboard-card { box-shadow: 0 12px 30px rgba(15, 23, 42, 0.09); }
-        .dashboard-theme-light .dashboard-real .dashboard-kpi-label,
-        .dashboard-theme-light .dashboard-real .dashboard-kpi-detail,
-        .dashboard-theme-light .dashboard-real .dashboard-panel-subtitle { color: #52647a !important; }
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-blue-300 { color: #2563eb !important; }
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-orange-300 { color: #ea580c !important; }
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-amber-300 { color: #b45309 !important; }
@@ -592,19 +508,8 @@ export default function DashboardPage() {
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-violet-300 { color: #7c3aed !important; }
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-cyan-300 { color: #0891b2 !important; }
         .dashboard-theme-light .dashboard-real .dashboard-kpi-value.text-fuchsia-300 { color: #c026d3 !important; }
-        .dashboard-real table th { font-size: 11px; }
-        .dashboard-real .dashboard-documents-table td { font-size: 12px; }
-        .dashboard-real .dashboard-documents-table .dashboard-table-fields,
-        .dashboard-real .dashboard-documents-table .dashboard-table-updated { font-size: 11px; }
         .dashboard-theme-light .dashboard-real .dashboard-documents-table thead { background: #f8fafc; }
-        .dashboard-theme-light .dashboard-real .dashboard-documents-table th { color: #52647a !important; }
-        .dashboard-theme-light .dashboard-real .dashboard-table-awb { color: #0f172a !important; }
-        .dashboard-theme-light .dashboard-real .dashboard-table-file { color: #334155 !important; }
-        .dashboard-theme-light .dashboard-real .dashboard-table-fields { color: #475569 !important; }
-        .dashboard-theme-light .dashboard-real .dashboard-table-updated { color: #52647a !important; }
         .dashboard-theme-light .dashboard-real .dashboard-table-pagination { border-color: #d5deea !important; background: #f8fafc; }
-        .dashboard-theme-light .dashboard-real .dashboard-table-pagination p,
-        .dashboard-theme-light .dashboard-real .dashboard-table-pagination span { color: #52647a !important; }
         .dashboard-theme-light .dashboard-real .dashboard-soft-metric-block {
           box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
         }
@@ -663,16 +568,6 @@ export default function DashboardPage() {
         }
         .dashboard-theme-light .dashboard-real .dashboard-ratio-track {
           background: #dbe4f0 !important;
-        }
-        .dashboard-theme-light .dashboard-real .dashboard-pagination-button {
-          border-color: #b9c6d8 !important;
-          background: #ffffff;
-          color: #334155 !important;
-        }
-        .dashboard-theme-light .dashboard-real .dashboard-pagination-button:hover:not(:disabled) {
-          background: #edf4ff !important;
-          border-color: #93b8ee !important;
-          color: #0f172a !important;
         }
       `}</style>
     </main>

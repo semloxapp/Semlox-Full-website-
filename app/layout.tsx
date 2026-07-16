@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CompanyProvider } from "./context/CompanyContext";
 import AuthHashRedirect from "./components/AuthHashRedirect";
+import QueryProvider from "./providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,10 +31,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <CompanyProvider>
-          <AuthHashRedirect />
-          {children}
-        </CompanyProvider>
+        <QueryProvider>
+          <CompanyProvider>
+            <AuthHashRedirect />
+            {children}
+          </CompanyProvider>
+        </QueryProvider>
       </body>
     </html>
   );

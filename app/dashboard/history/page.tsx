@@ -16,52 +16,25 @@ import {
   X,
 } from "lucide-react";
 import { useCompany } from "../../context/CompanyContext";
-import { fetchMemberships } from "../../utils/authClient";
+import {
+  EMPTY_HISTORY_STATS,
+  type HistoryDocument,
+  type HistoryScope,
+  type HistoryStats,
+  type HistoryStatus,
+  useAwbHistory,
+} from "../../hooks/queries/useAwbHistory";
+import { membershipErrorStatus, useMemberships } from "../../hooks/queries/useMemberships";
+import { getAcceptedMemberships } from "../../utils/membership";
 import type { AwbExtractionResponse } from "@/lib/awb/types";
+import { Badge, type BadgeProps } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { Input } from "../../components/ui/Input";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Select } from "../../components/ui/Select";
 
-type HistoryScope = "my" | "company";
-type HistoryStatus = AwbExtractionResponse["document"]["status"];
 type SortKey = "createdAt" | "awbNumber" | "action" | "fields" | "processedBy" | "status";
-type HistoryStats = {
-  totalDocuments: number;
-  successful: number;
-  failed: number;
-  drafts: number;
-  issued: number;
-};
-type HistoryDocument = {
-  id: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-  storagePath: string | null;
-  status: HistoryStatus;
-  extractionMode: string;
-  runId: string | null;
-  pages: number;
-  processingTimeMs: number;
-  createdAt: string;
-  updatedAt: string;
-  uploadedBy: string;
-  processedBy: { id: string; name: string; email: string };
-  awbNumber: string;
-  action: string;
-  fields: {
-    total: number;
-    captured: number;
-    valid: number;
-    warnings: number;
-    review: number;
-    missing: number;
-  };
-};
-type HistoryResponse = {
-  scope: HistoryScope;
-  canViewCompanyHistory: boolean;
-  role: string;
-  stats: HistoryStats;
-  documents: HistoryDocument[];
-};
 type DocumentDetails = AwbExtractionResponse & {
   history?: {
     uploadedBy: string;
@@ -71,14 +44,6 @@ type DocumentDetails = AwbExtractionResponse & {
     updatedAt: string;
     canEdit: boolean;
   };
-};
-
-const EMPTY_STATS: HistoryStats = {
-  totalDocuments: 0,
-  successful: 0,
-  failed: 0,
-  drafts: 0,
-  issued: 0,
 };
 
 function messageFromPayload(payload: unknown, fallback: string) {
@@ -119,15 +84,17 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function statusConfig(status: HistoryStatus) {
-  if (status === "issued") return { label: "AWB Issued", className: "history-b-issued" };
-  if (status === "ready_to_issue") return { label: "Ready to Issue", className: "history-b-ok" };
-  if (status === "draft") return { label: "Draft Saved", className: "history-b-draft" };
-  if (status === "review_required") return { label: "Partial", className: "history-b-partial" };
-  if (status === "failed") return { label: "Failed", className: "history-b-fail" };
+function statusConfig(
+  status: HistoryStatus,
+): { label: string; variant: BadgeProps["variant"] } {
+  if (status === "issued") return { label: "AWB Issued", variant: "info" };
+  if (status === "ready_to_issue") return { label: "Ready to Issue", variant: "success" };
+  if (status === "draft") return { label: "Draft Saved", variant: "neutral" };
+  if (status === "review_required") return { label: "Partial", variant: "warning" };
+  if (status === "failed") return { label: "Failed", variant: "danger" };
   return {
     label: status === "extracting" ? "Processing" : "Uploaded",
-    className: "history-b-neutral",
+    variant: "neutral",
   };
 }
 
@@ -259,7 +226,7 @@ function CustomCalendar({
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="text-[13px] font-bold history-text">
+        <div className="semlox-section-title">
           {CALENDAR_MONTHS[month]} {year}
         </div>
       </div>
@@ -347,23 +314,23 @@ function DateRangePicker({
 
   return (
     <div ref={pickerRef} className="relative flex items-center gap-1.5">
-      <button
-        type="button"
+      <Button
+        variant={from ? "solid" : "outline"}
         onClick={() => setOpen((current) => (current === "from" ? null : "from"))}
-        className={`history-date-button ${from ? "history-date-active" : ""}`}
+        className="history-date-button"
       >
         <CalendarDays className="h-3 w-3" />
         {from ? dateParts(`${from}T00:00:00`).date : "From date"}
-      </button>
-      <span className="text-[11px] history-muted">→</span>
-      <button
-        type="button"
+      </Button>
+      <span className="semlox-table-body">→</span>
+      <Button
+        variant={to ? "solid" : "outline"}
         onClick={() => setOpen((current) => (current === "to" ? null : "to"))}
-        className={`history-date-button ${to ? "history-date-active" : ""}`}
+        className="history-date-button"
       >
         <CalendarDays className="h-3 w-3" />
         {to ? dateParts(`${to}T00:00:00`).date : "To date"}
-      </button>
+      </Button>
       {open === "from" ? (
         <CustomCalendar
           value={from}
@@ -396,13 +363,13 @@ function StatCard({
   variant: "blue" | "green" | "red" | "amber";
 }) {
   return (
-    <div className={`history-stat-card history-stat-${variant}`}>
-      <div className="history-stat-label">{label}</div>
-      <div className={`history-stat-value history-stat-value-${variant}`}>{value}</div>
-      <div className={`history-stat-footer ${variant === "red" ? "text-blue-400" : ""}`}>
+    <Card className={`history-stat-card history-stat-${variant}`}>
+      <div className="semlox-kpi-label history-stat-label">{label}</div>
+      <div className={`semlox-kpi-value history-stat-value history-stat-value-${variant}`}>{value}</div>
+      <div className="semlox-kpi-description history-stat-footer">
         {footer}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -432,10 +399,10 @@ function DetailPanel({
     <>
       <div className="history-drawer-header">
         <div className="min-w-0 flex-1">
-          <div className="truncate font-mono text-xs font-bold history-text">
+          <div className="semlox-identifier truncate font-mono">
             {document.awbNumber}
           </div>
-          <div className="mt-0.5 text-[10px] history-muted">
+          <div className="semlox-metadata mt-0.5">
             {document.action} · {dateParts(document.updatedAt).date}
           </div>
         </div>
@@ -457,53 +424,53 @@ function DetailPanel({
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-400">
+          <div className="semlox-body rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-400">
             <div>{error}</div>
-            <button type="button" onClick={onRetry} className="mt-3 font-semibold text-white">
+            <Button type="button" onClick={onRetry} variant="danger" size="compact" className="mt-3">
               Retry
-            </button>
+            </Button>
           </div>
         ) : details ? (
           <>
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className={`history-badge ${config.className}`}>
+              <Badge variant={config.variant}>
                 <span className="h-1 w-1 rounded-full bg-current" />
                 {config.label}
-              </span>
+              </Badge>
               <span className="history-doc-tag">AWB</span>
-              <span className="ml-auto text-[11px] history-muted">
+              <span className="semlox-metadata ml-auto">
                 {formatBytes(document.fileSize)} · {document.pages}p
               </span>
             </div>
 
             {!details.history?.storagePath ? (
-              <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-400">
+              <div className="semlox-label mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-amber-400">
                 Source file is not stored yet.
               </div>
             ) : null}
 
             <section className="history-drawer-section">
-              <h3 className="history-drawer-section-title">Extraction Summary</h3>
+              <h3 className="semlox-label history-drawer-section-title">Extraction Summary</h3>
               <div className="history-summary-grid">
                 <div className="history-summary-item">
-                  <div className="font-mono text-lg font-bold text-emerald-400">
+                  <div className="text-lg font-bold text-emerald-400">
                     {document.fields.captured}/{document.fields.total}
                   </div>
-                  <div className="history-summary-label">Fields</div>
+                  <div className="semlox-metadata history-summary-label">Fields</div>
                 </div>
                 <div className="history-summary-item">
-                  <div className="font-mono text-lg font-bold text-blue-400">{document.pages}</div>
-                  <div className="history-summary-label">Pages</div>
+                  <div className="text-lg font-bold text-blue-400">{document.pages}</div>
+                  <div className="semlox-metadata history-summary-label">Pages</div>
                 </div>
                 <div className="history-summary-item">
-                  <div className="font-mono text-lg font-bold text-cyan-400">{accuracy}%</div>
-                  <div className="history-summary-label">Accuracy</div>
+                  <div className="text-lg font-bold text-cyan-400">{accuracy}%</div>
+                  <div className="semlox-metadata history-summary-label">Accuracy</div>
                 </div>
               </div>
             </section>
 
             <section className="history-drawer-section">
-              <h3 className="history-drawer-section-title">Document Information</h3>
+              <h3 className="semlox-label history-drawer-section-title">Document Information</h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   ["File", document.fileName],
@@ -512,8 +479,8 @@ function DetailPanel({
                   ["Updated", formatDateTime(document.updatedAt)],
                 ].map(([label, value]) => (
                   <div key={label} className="history-detail-tile">
-                    <div className="text-[9px] uppercase history-muted">{label}</div>
-                    <div className="mt-1 break-words text-[10px] font-semibold history-text2">
+                    <div className="semlox-metadata uppercase">{label}</div>
+                    <div className="semlox-table-body mt-1 break-words">
                       {value}
                     </div>
                   </div>
@@ -522,7 +489,7 @@ function DetailPanel({
             </section>
 
             <section className="history-drawer-section">
-              <h3 className="history-drawer-section-title">Extracted Fields · AI Confidence</h3>
+              <h3 className="semlox-label history-drawer-section-title">Extracted Fields · AI Confidence</h3>
               {details.fields.map((field) => {
                 const confidenceColor =
                   field.confidencePercent >= 95
@@ -535,9 +502,9 @@ function DetailPanel({
                 const [barColor, textColor] = confidenceColor.split(" ");
                 return (
                   <div key={field.key} className="history-field-card">
-                    <div className="text-[9px] uppercase tracking-wide history-muted">{field.label}</div>
+                    <div className="semlox-metadata uppercase tracking-wide">{field.label}</div>
                     <div
-                      className={`mt-0.5 whitespace-pre-wrap break-words font-mono text-[11px] font-semibold ${
+                      className={`semlox-identifier mt-0.5 whitespace-pre-wrap break-words ${
                         field.value ? "history-text" : "text-red-400"
                       }`}
                     >
@@ -550,7 +517,7 @@ function DetailPanel({
                           style={{ width: `${field.confidencePercent}%` }}
                         />
                       </div>
-                      <span className={`w-7 text-right font-mono text-[9px] ${textColor}`}>
+                      <span className={`w-7 text-right text-[9px] ${textColor}`}>
                         {field.confidencePercent}%
                       </span>
                     </div>
@@ -560,7 +527,7 @@ function DetailPanel({
             </section>
 
             <section className="history-drawer-section">
-              <h3 className="history-drawer-section-title">Document Timeline</h3>
+              <h3 className="semlox-label history-drawer-section-title">Document Timeline</h3>
               {[
                 {
                   label: "File Uploaded",
@@ -582,8 +549,8 @@ function DetailPanel({
                     }`}
                   />
                   <div>
-                    <div className="text-[11px] font-semibold history-text2">{item.label}</div>
-                    <div className="mt-0.5 font-mono text-[9px] history-muted">
+                    <div className="semlox-table-body">{item.label}</div>
+                    <div className="semlox-metadata mt-0.5 font-mono">
                       {formatDateTime(item.value)}
                     </div>
                   </div>
@@ -595,19 +562,20 @@ function DetailPanel({
       </div>
 
       <div className="history-drawer-actions">
-        <button type="button" onClick={onOpen} className="history-drawer-primary">
+        <Button type="button" onClick={onOpen} variant="primary" className="flex-1">
           <ExternalLink className="h-3 w-3" />
           Open Document
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           disabled
           title="Final PDF download will be available after export is connected."
-          className="history-drawer-secondary"
+          variant="secondary"
+          className="flex-1"
         >
           <Download className="h-3 w-3" />
           Download
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -618,12 +586,6 @@ export default function HistoryPage() {
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
   const [allowed, setAllowed] = useState(false);
   const [scope, setScope] = useState<HistoryScope>("my");
-  const [canViewCompanyHistory, setCanViewCompanyHistory] = useState(false);
-  const [documents, setDocuments] = useState<HistoryDocument[]>([]);
-  const [stats, setStats] = useState<HistoryStats>(EMPTY_STATS);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [action, setAction] = useState("all");
@@ -639,67 +601,52 @@ export default function HistoryPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
+  const membershipsQuery = useMemberships();
+  const historyQuery = useAwbHistory(
+    { companyId: selectedCompanyId, scope, search, status, action, range, from, to },
+    { enabled: allowed }
+  );
+  const historyData = historyQuery.data;
+  const documents = useMemo(() => historyData?.documents || [], [historyData?.documents]);
+  const stats: HistoryStats = historyData?.stats || EMPTY_HISTORY_STATS;
+  const canViewCompanyHistory = Boolean(historyData?.canViewCompanyHistory);
 
   useEffect(() => {
-    let mounted = true;
-    void fetchMemberships().then((result) => {
-      if (!mounted) return;
-      if (!result.ok) {
-        if (result.status === 401 || result.status === 403) router.replace("/login");
+    if (membershipsQuery.isPending) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (membershipsQuery.isError) {
+        const status = membershipErrorStatus(membershipsQuery.error);
+        if (status === 401 || status === 403) router.replace("/login");
         else setAllowed(true);
         return;
       }
-      const accepted = (result.memberships || []).filter(
-        (membership: { accepted_at?: string | null }) => membership.accepted_at
-      );
+      const accepted = getAcceptedMemberships(membershipsQuery.data);
       if (!selectedCompanyId && accepted.length === 1) {
         setSelectedCompanyId(accepted[0].company_id, true);
       }
       setAllowed(true);
     });
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [router, selectedCompanyId, setSelectedCompanyId]);
-
-  const loadHistory = useCallback(async () => {
-    if (!allowed || !selectedCompanyId) return;
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams({ companyId: selectedCompanyId, scope });
-    if (search.trim()) params.set("search", search.trim());
-    if (status !== "all") params.set("status", status);
-    if (action !== "all") params.set("action", action);
-    if (range !== "all") params.set("range", range);
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    try {
-      const response = await fetch(`/api/awb/history?${params.toString()}`, {
-        credentials: "include",
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload?.ok === false) {
-        throw new Error(messageFromPayload(payload, "Unable to load AWB history."));
-      }
-      const data = payload.data as HistoryResponse;
-      setDocuments(Array.isArray(data.documents) ? data.documents : []);
-      setStats(data.stats || EMPTY_STATS);
-      setCanViewCompanyHistory(Boolean(data.canViewCompanyHistory));
-      setChecked([]);
-      setPage(1);
-    } catch (loadError) {
-      setDocuments([]);
-      setStats(EMPTY_STATS);
-      setError(loadError instanceof Error ? loadError.message : "Unable to load AWB history.");
-    } finally {
-      setLoading(false);
-    }
-  }, [action, allowed, from, range, scope, search, selectedCompanyId, status, to]);
+  }, [
+    membershipsQuery.data,
+    membershipsQuery.error,
+    membershipsQuery.isError,
+    membershipsQuery.isPending,
+    router,
+    selectedCompanyId,
+    setSelectedCompanyId,
+  ]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadHistory(), 250);
-    return () => window.clearTimeout(timer);
-  }, [loadHistory, refreshKey]);
+    queueMicrotask(() => {
+      setChecked([]);
+      setPage(1);
+    });
+  }, [action, from, range, scope, search, status, to]);
 
   const loadDetails = useCallback(async (document: HistoryDocument) => {
     setSelected(document);
@@ -823,72 +770,55 @@ export default function HistoryPage() {
     <main className="history-page flex h-full min-h-0 overflow-hidden">
       <div className="history-main min-w-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[22px] font-bold tracking-[-0.03em] history-text">
-                Activity History
-              </h1>
-              <p className="mt-1 text-xs history-muted">
-                Track generated, updated, and finalized AWBs · All document actions
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="history-total-chip">Total: {documents.length}</div>
-              <button
-                type="button"
-                onClick={() => setRefreshKey((value) => value + 1)}
-                className="history-pill-button"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh
-              </button>
-              {checked.length ? (
-                <div className="history-pill-button history-pill-primary">
-                  <Check className="h-3 w-3" />
-                  {checked.length} selected
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="history-pill-button history-pill-danger"
-              >
-                <X className="h-3 w-3" />
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={exportCsv}
-                disabled={!documents.length}
-                className="history-pill-button disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Download className="h-3 w-3" />
-                Export CSV
-              </button>
-            </div>
-          </div>
+          <PageHeader
+            title="Activity History"
+            description="Track generated, updated, and finalized AWBs · All document actions"
+            actions={
+              <>
+                <Badge variant="neutral">Total: {documents.length}</Badge>
+                <Button
+                  onClick={() => void historyQuery.refetch()}
+                  disabled={historyQuery.isFetching}
+                  variant="secondary"
+                >
+                  <RefreshCw className={`h-3 w-3 ${historyQuery.isFetching ? "animate-spin" : ""}`} />
+                  {historyQuery.isFetching ? "Refreshing" : "Refresh"}
+                </Button>
+                {checked.length ? (
+                  <Badge variant="info">
+                    <Check className="h-3 w-3" />
+                    {checked.length} selected
+                  </Badge>
+                ) : null}
+                <Button onClick={clearFilters} variant="outline">
+                  <X className="h-3 w-3" />
+                  Clear
+                </Button>
+                <Button onClick={exportCsv} disabled={!documents.length} variant="secondary">
+                  <Download className="h-3 w-3" />
+                  Export CSV
+                </Button>
+              </>
+            }
+          />
 
           {canViewCompanyHistory ? (
-            <div className="inline-flex w-fit rounded-lg border history-border history-card-bg p-0.5">
+            <div className="inline-flex w-fit rounded-[var(--semlox-radius-control)] border history-border history-card-bg p-0.5">
               {([
                 ["my", "My History"],
                 ["company", "Company History"],
               ] as const).map(([value, label]) => (
-                <button
+                <Button
                   key={value}
-                  type="button"
                   onClick={() => {
                     setScope(value);
                     setSelected(null);
                   }}
-                  className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition ${
-                    scope === value
-                      ? "bg-blue-500 text-white"
-                      : "history-muted hover:text-blue-400"
-                  }`}
+                  size="toggle"
+                  variant={scope === value ? "solid" : "ghost"}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}
@@ -920,15 +850,16 @@ export default function HistoryPage() {
             />
           </div>
 
-          <div className="history-filter-bar">
-            <label className="history-search-input">
-              <Search className="h-3.5 w-3.5 history-muted" />
-              <input
+          <Card className="history-filter-bar">
+            <div className="relative min-w-[220px] max-w-[280px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 history-muted" />
+              <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search by AWB #, action, user..."
+                className="pl-9"
               />
-            </label>
+            </div>
             <div className="history-filter-divider" />
             <DateRangePicker
               from={from}
@@ -946,22 +877,21 @@ export default function HistoryPage() {
                 ["7d", "Last 7 days"],
                 ["30d", "Last 30 days"],
               ] as const).map(([value, label]) => (
-                <button
+                <Button
                   key={value}
-                  type="button"
                   onClick={() => setRange(value)}
-                  className={`history-quick-pill ${range === value ? "history-quick-active" : ""}`}
+                  size="compact"
+                  variant={range === value ? "solid" : "secondary"}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="history-filter-divider" />
             <div className="flex gap-1.5">
-              <select
+              <Select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="history-select"
               >
                 <option value="all">All Status</option>
                 <option value="uploaded">Uploaded</option>
@@ -971,93 +901,93 @@ export default function HistoryPage() {
                 <option value="draft">Draft</option>
                 <option value="issued">AWB Issued</option>
                 <option value="failed">Failed</option>
-              </select>
-              <select
+              </Select>
+              <Select
                 value={action}
                 onChange={(event) => setAction(event.target.value)}
-                className="history-select"
               >
                 <option value="all">All Actions</option>
                 <option value="Initial Extraction">Initial Extraction</option>
                 <option value="Draft Saved">Draft Saved</option>
                 <option value="Issued AWB">Issued AWB</option>
                 <option value="Failed">Failed</option>
-              </select>
+              </Select>
             </div>
-          </div>
+          </Card>
 
-          <div className="history-table-card">
+          <Card className="history-table-card">
             <div className="history-table-top">
-              <span className="text-[13px] font-semibold history-text">Documents</span>
-              <span className="history-table-count">{documents.length} records</span>
+              <span className="semlox-section-title">Documents</span>
+              <Badge variant="info">{documents.length} records</Badge>
               {checked.length ? (
-                <span className="ml-1 font-mono text-[11px] text-blue-400">
+                <span className="semlox-link ml-1">
                   {checked.length} selected
                 </span>
               ) : null}
               <div className="ml-auto flex gap-1.5">
                 {checked.length ? (
                   <>
-                    <button type="button" disabled className="history-table-button text-blue-400">
+                    <Button disabled size="compact" variant="secondary">
                       Re-process
-                    </button>
-                    <button type="button" disabled className="history-table-button">
+                    </Button>
+                    <Button disabled size="compact" variant="secondary">
                       Download
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       onClick={() => setChecked([])}
-                      className="history-table-button history-table-danger"
+                      size="compact"
+                      variant="danger"
                     >
                       Deselect
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <>
-                    <button type="button" className="history-table-button">
+                    <Button size="compact" variant="secondary">
                       <Columns3 className="h-3 w-3" />
                       Columns
-                    </button>
-                    <button type="button" onClick={exportCsv} className="history-table-button">
+                    </Button>
+                    <Button size="compact" variant="secondary" onClick={exportCsv}>
                       <Download className="h-3 w-3" />
                       Export
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
             </div>
 
-            {loading ? (
+            {historyQuery.isPending && !historyData ? (
               <div className="space-y-2 p-4">
                 {Array.from({ length: 6 }, (_, index) => (
                   <div key={index} className="h-12 animate-pulse rounded history-card-bg" />
                 ))}
               </div>
-            ) : error ? (
+            ) : historyQuery.error && !historyData ? (
               <div className="p-10 text-center">
-                <div className="text-xs font-semibold text-red-400">{error}</div>
-                <button
-                  type="button"
-                  onClick={() => setRefreshKey((value) => value + 1)}
-                  className="mt-3 text-xs font-semibold text-blue-400"
+                <div className="semlox-section-title text-red-400">{historyQuery.error.message}</div>
+                <Button
+                  onClick={() => void historyQuery.refetch()}
+                  size="compact"
+                  variant="ghost"
+                  className="mt-3"
                 >
                   Retry
-                </button>
+                </Button>
               </div>
             ) : !documents.length ? (
               <div className="flex min-h-52 flex-col items-center justify-center text-center">
                 <FileText className="h-7 w-7 history-faint" />
-                <div className="mt-3 text-xs font-semibold history-text2">
+                <div className="semlox-table-body mt-3">
                   No AWB history found.
                 </div>
-                <div className="mt-1 text-[10px] history-muted">
+                <div className="semlox-metadata mt-1">
                   Upload or process an AWB to create history.
                 </div>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="history-table min-w-[900px]">
-                  <thead>
+                <table className="semlox-table-body history-table min-w-[900px]">
+                  <thead className="semlox-table-header">
                     <tr>
                       <th className="w-9 px-4">
                         <Checkbox
@@ -1133,20 +1063,20 @@ export default function HistoryPage() {
                             />
                           </td>
                           <td>
-                            <div className="whitespace-nowrap font-mono text-[10px] font-semibold history-text">
+                            <div className="semlox-identifier whitespace-nowrap font-mono">
                               {date.date}
                             </div>
-                            <div className="mt-px font-mono text-[9px] history-muted">
+                            <div className="semlox-metadata mt-px font-mono">
                               {date.time}
                             </div>
                           </td>
                           <td>
-                            <span className="font-mono text-[11px] font-bold history-text">
+                            <span className="semlox-identifier">
                               {document.awbNumber}
                             </span>
                           </td>
                           <td>
-                            <span className={`text-xs font-medium ${actionColor(document.action)}`}>
+                            <span className={`semlox-table-body ${actionColor(document.action)}`}>
                               {document.action}
                             </span>
                           </td>
@@ -1155,7 +1085,7 @@ export default function HistoryPage() {
                           </td>
                           <td>
                             <div className="flex items-center gap-2">
-                              <span className={`font-mono text-[11px] font-bold ${fieldText}`}>
+                              <span className={`semlox-identifier ${fieldText}`}>
                                 {document.fields.captured}/{document.fields.total}
                               </span>
                               <div className="h-[3px] w-[52px] overflow-hidden rounded history-track">
@@ -1172,12 +1102,12 @@ export default function HistoryPage() {
                                 {initials(document.processedBy.name)}
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-xs history-text2">
+                                <div className="semlox-table-body truncate">
                                   {document.processedBy.name}
                                 </div>
                                 {document.processedBy.email &&
                                 document.processedBy.email !== document.processedBy.name ? (
-                                  <div className="truncate text-[9px] history-muted">
+                                  <div className="semlox-metadata truncate">
                                     {document.processedBy.email}
                                   </div>
                                 ) : null}
@@ -1185,20 +1115,20 @@ export default function HistoryPage() {
                             </div>
                           </td>
                           <td>
-                            <span className={`history-badge ${config.className}`}>
+                            <Badge variant={config.variant}>
                               <span className="h-1 w-1 rounded-full bg-current" />
                               {config.label}
-                            </span>
+                            </Badge>
                           </td>
                           <td onClick={(event) => event.stopPropagation()}>
-                            <button
-                              type="button"
+                            <Button
                               onClick={() => void loadDetails(document)}
-                              className="history-open-button"
+                              size="compact"
+                              variant="compactAction"
                             >
                               <ExternalLink className="h-3 w-3" />
                               Open
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       );
@@ -1209,60 +1139,61 @@ export default function HistoryPage() {
             )}
 
             <div className="history-pagination">
-              <div className="font-mono text-[11px] history-muted">
+              <div className="semlox-table-body">
                 Showing{" "}
                 {documents.length === 0 ? 0 : (currentPage - 1) * perPage + 1}–
                 {Math.min(currentPage * perPage, documents.length)} of {documents.length}
               </div>
               <div className="flex gap-1">
-                <button
-                  type="button"
+                <Button
+                  size="compact"
+                  variant="secondary"
                   disabled={currentPage === 1}
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
                   className="history-page-button"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
+                </Button>
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => index + 1).map(
                   (number) => (
-                    <button
+                    <Button
                       key={number}
-                      type="button"
+                      size="compact"
+                      variant={currentPage === number ? "solid" : "secondary"}
                       onClick={() => setPage(number)}
-                      className={`history-page-button ${
-                        currentPage === number ? "history-page-active" : ""
-                      }`}
+                      className="history-page-button"
                     >
                       {number}
-                    </button>
+                    </Button>
                   )
                 )}
-                <button
-                  type="button"
+                <Button
+                  size="compact"
+                  variant="secondary"
                   disabled={currentPage === totalPages}
                   onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
                   className="history-page-button"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
-              <label className="flex items-center gap-2 text-[11px] history-muted">
+              <label className="semlox-table-body flex items-center gap-2">
                 Rows per page:
-                <select
+                <Select
                   value={perPage}
+                  size="compact"
                   onChange={(event) => {
                     setPerPage(Number(event.target.value));
                     setPage(1);
                   }}
-                  className="history-page-select"
                 >
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
-                </select>
+                </Select>
               </label>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -1291,12 +1222,12 @@ export default function HistoryPage() {
           --history-card: rgba(255, 255, 255, 0.03);
           --history-card-border: rgba(255, 255, 255, 0.08);
           --history-card-hover: rgba(255, 255, 255, 0.055);
-          --history-text: #f1f5f9;
-          --history-text2: #cbd5e1;
-          --history-muted: #64748b;
+          --history-text: var(--semlox-text-primary);
+          --history-text2: var(--semlox-text-secondary);
+          --history-muted: var(--semlox-text-muted);
           --history-faint: #1e293b;
-          --history-input: rgba(255, 255, 255, 0.04);
-          --history-input-border: rgba(255, 255, 255, 0.1);
+          --history-input: var(--semlox-interactive-surface);
+          --history-input-border: var(--semlox-interactive-border);
           --history-row-hover: rgba(255, 255, 255, 0.025);
           --history-row-selected: rgba(59, 130, 246, 0.07);
           --history-table-head: rgba(255, 255, 255, 0.02);
@@ -1309,12 +1240,12 @@ export default function HistoryPage() {
           --history-card: #ffffff;
           --history-card-border: #d5deea;
           --history-card-hover: #edf4ff;
-          --history-text: #0f172a;
-          --history-text2: #1e293b;
-          --history-muted: #52647a;
+          --history-text: var(--semlox-text-primary);
+          --history-text2: var(--semlox-text-secondary);
+          --history-muted: var(--semlox-text-muted);
           --history-faint: #718096;
-          --history-input: #ffffff;
-          --history-input-border: #b9c6d8;
+          --history-input: var(--semlox-interactive-surface);
+          --history-input-border: var(--semlox-interactive-border);
           --history-row-hover: #edf4ff;
           --history-row-selected: #e6f0ff;
           --history-table-head: #f8fafc;
@@ -1331,39 +1262,8 @@ export default function HistoryPage() {
         .history-border { border-color: var(--history-card-border); }
         .history-card-bg { background: var(--history-card); }
         .history-track { background: var(--history-faint); }
-        .history-total-chip,
-        .history-pill-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          min-height: 31px;
-          padding: 7px 14px;
-          border-radius: 20px;
-          border: 1px solid var(--history-card-border);
-          background: var(--history-card);
-          color: var(--history-muted);
-          font-size: 12px;
-          white-space: nowrap;
-          transition: all 0.15s;
-        }
-        .history-total-chip {
-          color: var(--history-text2);
-          font-family: monospace;
-          font-weight: 700;
-        }
-        .history-pill-button:hover {
-          border-color: rgba(59, 130, 246, 0.3);
-          background: var(--history-card-hover);
-          color: var(--history-text2);
-        }
-        .history-pill-danger:hover { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
-        .history-pill-primary { border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
         .history-stat-card {
           position: relative;
-          overflow: hidden;
-          border: 1px solid var(--history-card-border);
-          border-radius: 12px;
-          background: var(--history-card);
           padding: 16px 18px;
           transition: all 0.2s;
         }
@@ -1373,56 +1273,24 @@ export default function HistoryPage() {
         .history-stat-red::before { background: linear-gradient(90deg, #ef4444, #f97316); }
         .history-stat-amber::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
         .history-stat-card:hover { transform: translateY(-1px); border-color: rgba(59, 130, 246, 0.25); }
-        .history-stat-label { margin-bottom: 8px; color: var(--history-muted); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
-        .history-stat-value { margin-bottom: 6px; font-family: monospace; font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -0.04em; }
+        .history-stat-label { margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .history-stat-value { margin-bottom: 6px; letter-spacing: -0.04em; }
         .history-stat-value-blue { color: #3b82f6; }
         .history-stat-value-green { color: #10b981; }
         .history-stat-value-red { color: #ef4444; }
         .history-stat-value-amber { color: #f59e0b; }
-        .history-stat-footer { color: var(--history-muted); font-size: 10px; }
         .history-filter-bar {
           display: flex;
           align-items: center;
           flex-wrap: wrap;
           gap: 8px;
-          border: 1px solid var(--history-card-border);
-          border-radius: 12px;
-          background: var(--history-card);
           padding: 12px 16px;
         }
         .history-filter-divider { width: 1px; height: 26px; background: var(--history-divider); }
-        .history-search-input {
-          display: flex;
-          min-width: 220px;
-          max-width: 280px;
-          flex: 1;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid var(--history-input-border);
-          border-radius: 8px;
-          background: var(--history-input);
-          padding: 7px 12px;
-        }
-        .history-search-input:focus-within { border-color: rgba(59, 130, 246, 0.4); }
-        .history-search-input input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--history-text); font-size: 12px; }
         .history-date-button {
           position: relative;
-          display: flex;
           min-width: 104px;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          border: 1px solid var(--history-input-border);
-          border-radius: 8px;
-          background: var(--history-input);
-          padding: 7px 12px;
-          color: var(--history-text2);
-          font-size: 12px;
-          white-space: nowrap;
-          cursor: pointer;
         }
-        .history-date-button:hover { border-color: rgba(59, 130, 246, 0.3); }
-        .history-date-active { border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; }
         .history-calendar-popup {
           position: absolute;
           left: 0;
@@ -1430,7 +1298,7 @@ export default function HistoryPage() {
           z-index: 100;
           width: 300px;
           border: 1px solid rgba(59, 130, 246, 0.24);
-          border-radius: 14px;
+          border-radius: var(--semlox-radius-card);
           background: rgba(15, 23, 42, 0.99);
           padding: 16px;
           color: #f1f5f9;
@@ -1556,68 +1424,18 @@ export default function HistoryPage() {
           cursor: not-allowed;
           opacity: 0.45;
         }
-        .history-quick-pill {
-          border: 1px solid var(--history-input-border);
-          border-radius: 7px;
-          padding: 6px 12px;
-          color: var(--history-muted);
-          font-size: 12px;
-          white-space: nowrap;
-        }
-        .history-quick-pill:hover { border-color: rgba(59, 130, 246, 0.3); color: var(--history-text2); }
-        .history-quick-active { border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.1); color: #3b82f6; font-weight: 600; }
-        .history-select,
-        .history-page-select {
-          border: 1px solid var(--history-input-border);
-          border-radius: 8px;
-          background: var(--history-input);
-          color: var(--history-text2);
-          padding: 7px 10px;
-          font-size: 12px;
-          outline: 0;
-        }
-        .history-select option,
-        .history-page-select option { background: var(--history-bg); color: var(--history-text); }
-        .history-table-card { overflow: hidden; border: 1px solid var(--history-card-border); border-radius: 14px; background: var(--history-card); }
         .history-table-top { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--history-divider); padding: 14px 18px; }
-        .history-table-count { border-radius: 5px; background: rgba(59, 130, 246, 0.1); padding: 2px 8px; color: #3b82f6; font-family: monospace; font-size: 11px; }
-        .history-table-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          border: 1px solid var(--history-card-border);
-          border-radius: 7px;
-          background: var(--history-card);
-          padding: 5px 12px;
-          color: var(--history-muted);
-          font-size: 11px;
-          font-weight: 600;
-        }
-        .history-table-button:hover { border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; }
-        .history-table-danger:hover { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
         .history-table { width: 100%; border-collapse: collapse; }
-        .history-table th { border-bottom: 1px solid var(--history-divider); background: var(--history-table-head); padding: 10px 14px; color: var(--history-muted); font-size: 10px; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
-        .history-table td { border-bottom: 1px solid var(--history-divider); padding: 11px 14px; color: var(--history-text2); font-size: 12px; vertical-align: middle; }
+        .history-table th { border-bottom: 1px solid var(--history-divider); background: var(--history-table-head); padding: 10px 14px; text-align: left; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+        .history-table td { border-bottom: 1px solid var(--history-divider); padding: 11px 14px; vertical-align: middle; }
         .history-table tbody tr:hover td { cursor: pointer; background: var(--history-row-hover); }
         .history-table tbody tr.history-row-selected td { background: var(--history-row-selected); }
         .history-check { display: flex; width: 15px; height: 15px; flex-shrink: 0; align-items: center; justify-content: center; border: 1.5px solid var(--history-input-border); border-radius: 3px; background: var(--history-input); color: white; }
         .history-check-on { border-color: #3b82f6; background: #3b82f6; }
-        .history-doc-tag { display: inline-flex; align-items: center; border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 5px; background: rgba(59, 130, 246, 0.08); padding: 3px 8px; color: #3b82f6; font-family: monospace; font-size: 10px; font-weight: 700; }
+        .history-doc-tag { display: inline-flex; align-items: center; border: 1px solid rgba(59, 130, 246, 0.15); border-radius: var(--semlox-radius-compact); background: rgba(59, 130, 246, 0.08); padding: 3px 8px; color: #3b82f6; font-family: monospace; font-size: var(--semlox-font-helper); font-weight: 700; }
         .history-user-avatar { display: flex; width: 22px; height: 22px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; font-size: 8px; font-weight: 700; }
-        .history-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 20px; padding: 3px 9px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-        .history-b-ok { border: 1px solid rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.12); color: #10b981; }
-        .history-b-issued { border: 1px solid rgba(59, 130, 246, 0.2); background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
-        .history-b-draft { border: 1px solid rgba(245, 158, 11, 0.2); background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
-        .history-b-partial { border: 1px solid rgba(249, 115, 22, 0.2); background: rgba(249, 115, 22, 0.12); color: #f97316; }
-        .history-b-fail { border: 1px solid rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.12); color: #ef4444; }
-        .history-b-neutral { border: 1px solid var(--history-card-border); background: var(--history-card); color: var(--history-muted); }
-        .history-open-button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 7px; background: rgba(59, 130, 246, 0.08); padding: 5px 12px; color: #3b82f6; font-size: 11px; font-weight: 600; }
-        .history-open-button:hover { border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.18); }
         .history-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--history-divider); padding: 12px 18px; }
-        .history-page-button { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 1px solid var(--history-card-border); border-radius: 6px; background: var(--history-card); color: var(--history-muted); font-size: 12px; }
-        .history-page-button:hover:not(:disabled) { border-color: rgba(59, 130, 246, 0.3); color: var(--history-text2); }
-        .history-page-button:disabled { cursor: not-allowed; opacity: 0.3; }
-        .history-page-active { border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.1); color: #3b82f6; font-weight: 700; }
+        .history-page-button { width: 32px; padding: 0; border-color: var(--history-card-border); background: var(--history-card); color: var(--history-muted); }
         .history-detail-drawer { width: 0; flex-shrink: 0; overflow: hidden; border-left: 0 solid var(--history-card-border); background: var(--history-card); transition: width 0.3s ease, border-width 0.3s ease; }
         .history-detail-open { width: 380px; border-left-width: 1px; }
         .history-drawer-header { display: flex; height: 60px; align-items: center; gap: 10px; border-bottom: 1px solid var(--history-divider); padding: 0 18px; }
@@ -1625,27 +1443,21 @@ export default function HistoryPage() {
         .history-close-button:hover { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
         .history-drawer-body { height: calc(100% - 116px); overflow-y: auto; padding: 16px; scrollbar-width: thin; scrollbar-color: var(--history-faint) transparent; }
         .history-drawer-section { margin-bottom: 18px; }
-        .history-drawer-section-title { margin-bottom: 10px; color: var(--history-muted); font-family: monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.8; }
-        .history-summary-grid { display: flex; overflow: hidden; border: 1px solid var(--history-card-border); border-radius: 10px; }
+        .history-drawer-section-title { margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.8; }
+        .history-summary-grid { display: flex; overflow: hidden; border: 1px solid var(--history-card-border); border-radius: var(--semlox-radius-control); }
         .history-summary-item { flex: 1; border-right: 1px solid var(--history-card-border); padding: 12px; text-align: center; }
         .history-summary-item:last-child { border-right: 0; }
-        .history-summary-label { color: var(--history-muted); font-size: 9px; letter-spacing: 0.04em; }
+        .history-summary-label { letter-spacing: 0.04em; }
         .history-detail-tile,
         .history-field-card { border: 1px solid var(--history-card-border); border-radius: 8px; background: var(--history-card); padding: 10px 12px; }
         .history-field-card { margin-bottom: 6px; }
         .history-drawer-actions { display: flex; height: 56px; gap: 8px; border-top: 1px solid var(--history-divider); padding: 10px 16px; }
-        .history-drawer-primary,
-        .history-drawer-secondary { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; padding: 10px; font-size: 12px; font-weight: 600; }
-        .history-drawer-primary { background: linear-gradient(135deg, #3b82f6, #06b6d4); color: white; }
-        .history-drawer-secondary { border: 1px solid var(--history-card-border); color: var(--history-muted); }
-        .history-drawer-secondary:disabled { cursor: not-allowed; opacity: 0.6; }
         @media (max-width: 1100px) {
           .history-detail-open { position: absolute; inset: 0 0 0 auto; z-index: 30; width: min(380px, 92vw); box-shadow: -20px 0 60px rgba(0, 0, 0, 0.4); }
         }
         @media (max-width: 767px) {
           .history-main { padding: 16px; }
           .history-filter-divider { display: none; }
-          .history-search-input { max-width: none; width: 100%; }
         }
       `}</style>
     </main>

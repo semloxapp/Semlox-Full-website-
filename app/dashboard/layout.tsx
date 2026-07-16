@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import NotificationBell from "./components/notifications/NotificationBell";
 import UserAccountMenu from "./components/UserAccountMenu";
+import DashboardMembershipBootstrap from "./components/DashboardMembershipBootstrap";
 
 function navClass(active: boolean) {
   return `dashboard-nav-item ${active ? "dashboard-nav-active" : "dashboard-nav-inactive"} flex h-[34px] items-center gap-2.5 rounded-[6px] px-3 text-[12.5px] ${
@@ -218,6 +219,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className={`dashboard-shell dashboard-theme-${theme} flex h-screen flex-col bg-[#050813]`}>
+      <DashboardMembershipBootstrap />
       <AppHeader theme={theme} onThemeChange={updateTheme} sidebarCollapsed={sidebarCollapsed} />
       <div className="mt-[50px] flex h-[calc(100vh-50px)] overflow-hidden">
         <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />

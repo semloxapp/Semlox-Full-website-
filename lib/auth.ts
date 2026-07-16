@@ -1,4 +1,5 @@
-import { supabaseUrl, supabaseServiceRoleKey, supabaseAnonKey } from "./supabase";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 type SupabaseUser = {
   id: string;
@@ -7,93 +8,91 @@ type SupabaseUser = {
   user_metadata?: Record<string, any>;
 };
 
-function decodeSessionCookie(cookieValue: string) {
+/**
+ * Public API preserved exactly as before (`extractBearerTokenFromRequest`,
+ * `getUserFromAccessToken`, `getMembershipsByUserId`,
+ * `getMembershipForUserAndCompany`) because 13 route files across the app
+ * import these four functions directly. Only the *implementation* changed:
+ *
+ *  - Cookie-based sessions are now read via the official @supabase/ssr
+ *    adapter (`createSupabaseServerClient`), which auto-refreshes an expired
+ *    access token using the refresh token instead of hard-failing.
+ *  - Membership/company table access now goes through the supabase-js query
+ *    builder against a service-role client instead of hand-built fetch()
+ *    calls with string-concatenated PostgREST query params.
+ *
+ * `extractBearerTokenFromRequest` is now async (it was previously
+ * synchronous). All 13 existing call sites already `await` the *next* call
+ * (`getUserFromAccessToken(token)`), so check each call site uses
+ * `await extractBearerTokenFromRequest(request)` when applying this change.
+ */
+export async function extractBearerTokenFromRequest(
+  request: Request
+): Promise<string | null> {
+  const header =
+    request.headers.get("authorization") || request.headers.get("Authorization");
+  if (header && header.startsWith("Bearer ")) return header.slice(7).trim();
+
+  // Fallback: cookie-based session, refreshed automatically if needed.
   try {
-    return JSON.parse(Buffer.from(cookieValue, "base64url").toString("utf8"));
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
   } catch {
-    const normalized = cookieValue.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const decoded = typeof globalThis.atob === "function"
-      ? globalThis.atob(padded)
-      : Buffer.from(padded, "base64").toString("utf8");
-    return JSON.parse(decoded);
+    return null;
   }
 }
 
-export async function getUserFromAccessToken(accessToken: string | null): Promise<SupabaseUser | null> {
-  if (!accessToken || !supabaseUrl) return null;
+export async function getUserFromAccessToken(
+  accessToken: string | null
+): Promise<SupabaseUser | null> {
+  if (!accessToken) return null;
 
-  // Use the anon key when validating an end-user access token.
-  const apikey = supabaseAnonKey ?? "";
-
-  const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey,
-    },
-  });
-
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  return data as SupabaseUser;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(accessToken);
+    if (error || !user) return null;
+    return user as SupabaseUser;
+  } catch {
+    return null;
+  }
 }
 
 export async function getMembershipsByUserId(userId: string) {
-  if (!userId || !supabaseUrl || !supabaseServiceRoleKey) return [];
+  if (!userId) return [];
 
-  // Return all memberships for the user (do not filter by accepted_at here).
-  const url = `${supabaseUrl}/rest/v1/memberships?user_id=eq.${userId}`;
-  const resp = await fetch(url, {
-    method: "GET",
-    headers: {
-      apikey: supabaseServiceRoleKey,
-      Authorization: `Bearer ${supabaseServiceRoleKey}`,
-    },
-  });
+  const service = createSupabaseServiceClient();
+  const { data, error } = await service
+    .from("memberships")
+    .select("*")
+    .eq("user_id", userId);
 
-  if (!resp.ok) {
+  if (error) {
     throw new Error("Failed to fetch memberships");
   }
 
-  const data = await resp.json();
-  return Array.isArray(data) ? data : [];
+  return data ?? [];
 }
 
-export async function getMembershipForUserAndCompany(userId: string, companyId: string) {
-  if (!userId || !companyId || !supabaseUrl || !supabaseServiceRoleKey) return null;
+export async function getMembershipForUserAndCompany(
+  userId: string,
+  companyId: string
+) {
+  if (!userId || !companyId) return null;
 
-  // Fetch membership for user and company without filtering by accepted_at.
-  const url = `${supabaseUrl}/rest/v1/memberships?user_id=eq.${userId}&company_id=eq.${companyId}`;
-  const resp = await fetch(url, {
-    method: "GET",
-    headers: {
-      apikey: supabaseServiceRoleKey,
-      Authorization: `Bearer ${supabaseServiceRoleKey}`,
-    },
-  });
+  const service = createSupabaseServiceClient();
+  const { data, error } = await service
+    .from("memberships")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
 
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  return Array.isArray(data) && data.length ? data[0] : null;
-}
-
-export function extractBearerTokenFromRequest(request: Request) {
-  const header = request.headers.get("authorization") || request.headers.get("Authorization");
-  if (header && header.startsWith("Bearer ")) return header.slice(7).trim();
-
-  // Fallback: check semlox_session cookie (server-set httpOnly cookie)
-  const cookie = request.headers.get("cookie") || "";
-  const match = cookie.split(";").map((c) => c.trim()).find((c) => c.startsWith("semlox_session="));
-  if (!match) return null;
-  const cookieVal = match.split("=")[1] || "";
-  try {
-    const payload = decodeSessionCookie(cookieVal);
-    // Check expiry
-    const expiresAt = Number(payload?.expires_at) || 0;
-    if (Date.now() > expiresAt) return null;
-    return payload?.access_token ?? null;
-  } catch (e) {
-    return null;
-  }
+  if (error) return null;
+  return data;
 }

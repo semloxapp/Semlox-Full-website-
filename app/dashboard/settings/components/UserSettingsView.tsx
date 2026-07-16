@@ -14,7 +14,18 @@ import {
   Sun,
   User,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type NotificationPreferences,
+  type UserProfileData,
+  userProfileQueryKeys,
+  useUserProfile as useUserProfileQuery,
+} from "../../../hooks/queries/useUserProfile";
+import {
+  userNotificationPreferencesQueryKey,
+  useUserNotificationPreferences,
+} from "../../../hooks/queries/useUserNotificationPreferences";
 
 type UserSettingsViewProps = {
   companyId?: string | null;
@@ -26,38 +37,6 @@ type UserSettingsViewProps = {
 };
 
 type UserSection = "profile" | "security" | "notifications" | "preferences" | "workspace";
-
-type WorkspaceInfo = {
-  company_id: string;
-  company_name: string;
-  role: string;
-  accepted_at: string | null;
-  joined_at: string | null;
-  status: string;
-} | null;
-
-type UserProfileData = {
-  full_name: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  job_title: string;
-  phone: string;
-  avatar_url: string;
-  city: string;
-  country: string;
-  timezone: string;
-  notifications: NotificationPreferences;
-  workspace: WorkspaceInfo;
-};
-
-type NotificationPreferences = {
-  awb_processed: boolean;
-  processing_failures: boolean;
-  mentions: boolean;
-  weekly_summary: boolean;
-  in_app_notifications: boolean;
-};
 
 type NotificationKey = keyof NotificationPreferences;
 
@@ -143,8 +122,10 @@ const userSections: Array<{ id: UserSection; label: string; icon: typeof User }>
 const allowedAvatarTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxAvatarBytes = 2 * 1024 * 1024;
 
-function jsonMessage(payload: any, fallback: string) {
-  return typeof payload?.message === "string" && payload.message ? payload.message : fallback;
+function jsonMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const message = (payload as Record<string, unknown>).message;
+  return typeof message === "string" && message ? message : fallback;
 }
 
 function formatRole(role?: string | null) {
@@ -267,9 +248,11 @@ function Toggle({
 }
 
 function useUserProfile(companyId?: string | null) {
+  const queryClient = useQueryClient();
+  const profileQuery = useUserProfileQuery(companyId);
   const [profile, setProfile] = useState<UserProfileData>(emptyProfile);
   const [form, setForm] = useState<ProfileForm>(emptyForm);
-  const [loading, setLoading] = useState(true);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
@@ -280,53 +263,36 @@ function useUserProfile(companyId?: string | null) {
     const nextData = { ...emptyProfile, ...data, workspace: data.workspace || null };
     setProfile(nextData);
     setForm(formFromProfile(nextData));
+    setDirty(false);
   }, []);
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
     setNotice(null);
-    try {
-      const params = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
-      const response = await fetch(`/api/user/profile${params}`, { credentials: "include" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload?.ok === false) {
-        setNotice({ type: "error", message: jsonMessage(payload, "Failed to load profile.") });
-        return;
-      }
-      applyProfile(payload.data || emptyProfile);
-    } catch {
-      setNotice({ type: "error", message: "Failed to load profile." });
-    } finally {
-      setLoading(false);
+    const result = await profileQuery.refetch();
+    if (result.error) {
+      setNotice({ type: "error", message: result.error.message || "Failed to load profile." });
+      return;
     }
-  }, [applyProfile, companyId]);
+    if (result.data) applyProfile(result.data);
+  }, [applyProfile, profileQuery]);
 
   useEffect(() => {
-    let active = true;
-    async function run() {
-      setLoading(true);
-      setNotice(null);
-      try {
-        const params = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
-        const response = await fetch(`/api/user/profile${params}`, { credentials: "include" });
-        const payload = await response.json().catch(() => ({}));
-        if (!active) return;
-        if (!response.ok || payload?.ok === false) {
-          setNotice({ type: "error", message: jsonMessage(payload, "Failed to load profile.") });
-          return;
-        }
-        applyProfile(payload.data || emptyProfile);
-      } catch {
-        if (active) setNotice({ type: "error", message: "Failed to load profile." });
-      } finally {
-        if (active) setLoading(false);
-      }
+    if (!profileQuery.data || dirty) return;
+    queueMicrotask(() => applyProfile(profileQuery.data));
+  }, [applyProfile, dirty, profileQuery.data]);
+
+  useEffect(() => {
+    if (profileQuery.error) {
+      queueMicrotask(() =>
+        setNotice({ type: "error", message: profileQuery.error?.message || "Failed to load profile." })
+      );
     }
-    run();
-    return () => {
-      active = false;
-    };
-  }, [applyProfile, companyId]);
+  }, [profileQuery.error]);
+
+  const updateForm = useCallback((value: SetStateAction<ProfileForm>) => {
+    setDirty(true);
+    setForm(value);
+  }, []);
 
   const saveProfile = useCallback(async () => {
     setSaving(true);
@@ -353,13 +319,14 @@ function useUserProfile(companyId?: string | null) {
         return;
       }
       applyProfile(payload.data || emptyProfile);
+      queryClient.setQueryData(userProfileQueryKeys.detail(companyId), payload.data || emptyProfile);
       setNotice({ type: "success", message: "Profile updated successfully." });
     } catch {
       setNotice({ type: "error", message: "Profile could not be updated." });
     } finally {
       setSaving(false);
     }
-  }, [applyProfile, companyId, form]);
+  }, [applyProfile, companyId, form, queryClient]);
 
   const uploadAvatar = useCallback(
     async (file: File) => {
@@ -387,7 +354,12 @@ function useUserProfile(companyId?: string | null) {
           setNotice({ type: "error", message: jsonMessage(payload, "Profile picture could not be uploaded.") });
           return;
         }
-        setProfile((current) => ({ ...current, avatar_url: payload?.data?.avatar_url || current.avatar_url }));
+        const avatarUrl = payload?.data?.avatar_url || "";
+        setProfile((current) => {
+          const next = { ...current, avatar_url: avatarUrl || current.avatar_url };
+          queryClient.setQueryData(userProfileQueryKeys.detail(companyId), next);
+          return next;
+        });
         setNotice({ type: "success", message: "Profile picture updated." });
       } catch {
         setNotice({ type: "error", message: "Profile picture could not be uploaded." });
@@ -395,7 +367,7 @@ function useUserProfile(companyId?: string | null) {
         setUploading(false);
       }
     },
-    []
+    [companyId, queryClient]
   );
 
   const sendPasswordReset = useCallback(async () => {
@@ -440,19 +412,21 @@ function useUserProfile(companyId?: string | null) {
       } catch {
         // Ignore browser storage errors.
       }
+      queryClient.clear();
       window.location.href = "/login";
     } catch {
       setNotice({ type: "error", message: "Unable to sign out. Please try again." });
     } finally {
       setSigningOut(false);
     }
-  }, []);
+  }, [queryClient]);
 
   return {
     profile,
     form,
-    setForm,
-    loading,
+    setForm: updateForm,
+    loading: profileQuery.isPending,
+    refreshing: profileQuery.isFetching,
     saving,
     uploading,
     resettingPassword,
@@ -475,6 +449,7 @@ export default function UserSettingsView({
   onSectionChange,
   showNavigation = true,
 }: UserSettingsViewProps) {
+  const queryClient = useQueryClient();
   const [localSection, setLocalSection] = useState<UserSection>(initialSection);
   const activeSection = controlledSection || localSection;
   const selectSection = onSectionChange || setLocalSection;
@@ -503,6 +478,7 @@ export default function UserSettingsView({
     sendPasswordReset,
     signOut,
   } = useUserProfile(companyId);
+  const notificationsQuery = useUserNotificationPreferences();
 
   const displayRole = useMemo(
     () => formatRole(profile.workspace?.role || role),
@@ -513,8 +489,14 @@ export default function UserSettingsView({
   const formDisabled = loading || saving;
 
   useEffect(() => {
-    setNotifications(profile.notifications || defaultNotifications);
-  }, [profile.notifications]);
+    if (notificationsQuery.data) {
+      const nextNotifications = { ...defaultNotifications, ...notificationsQuery.data };
+      queueMicrotask(() => setNotifications(nextNotifications));
+      return;
+    }
+    const nextNotifications = profile.notifications || defaultNotifications;
+    queueMicrotask(() => setNotifications(nextNotifications));
+  }, [notificationsQuery.data, profile.notifications]);
 
   const updateNotificationPreference = useCallback(
     async (key: NotificationKey, checked: boolean) => {
@@ -537,7 +519,14 @@ export default function UserSettingsView({
           return;
         }
         const nextNotifications = payload?.data?.notifications || null;
-        if (nextNotifications) setNotifications({ ...defaultNotifications, ...nextNotifications });
+        if (nextNotifications) {
+          const normalizedNotifications = { ...defaultNotifications, ...nextNotifications };
+          setNotifications(normalizedNotifications);
+          queryClient.setQueryData(userNotificationPreferencesQueryKey, normalizedNotifications);
+          queryClient.setQueryData(userProfileQueryKeys.detail(companyId), (current: UserProfileData | undefined) =>
+            current ? { ...current, notifications: normalizedNotifications } : current
+          );
+        }
         setNotice({ type: "success", message: jsonMessage(payload, "Notification preferences updated.") });
       } catch {
         setNotifications(previous);
@@ -546,7 +535,7 @@ export default function UserSettingsView({
         setSavingPreference(null);
       }
     },
-    [notifications, setNotice]
+    [companyId, notifications, queryClient, setNotice]
   );
 
   return (

@@ -113,10 +113,10 @@ export async function POST(request: Request) {
     return jsonResponse({ ok: false, code: "INVALID_ROLE", message: "Please select a valid member role." }, 400);
   }
 
-  // Authenticate: accept Bearer header or semlox_session cookie via helper
-  const token = extractBearerTokenFromRequest(request);
+  // Authenticate: accept Bearer header or the Supabase session cookie(s) via helper
+  const token = await extractBearerTokenFromRequest(request);
   const headerPresent = Boolean(request.headers.get("authorization") || request.headers.get("Authorization"));
-  const cookiePresent = Boolean((request.headers.get("cookie") || "").includes("semlox_session="));
+  const cookiePresent = Boolean((request.headers.get("cookie") || "").includes("sb-"));
   if (process.env.NODE_ENV !== "production") console.log("[invite-api] auth method", { headerPresent, cookiePresent });
 
   if (!token) {

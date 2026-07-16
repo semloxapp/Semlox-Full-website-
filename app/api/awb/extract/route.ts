@@ -202,7 +202,7 @@ async function getExtraction(
 }
 
 export async function POST(request: Request) {
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token || !(await getUserFromAccessToken(token))?.id) {
     return awbJsonResponse(
       {

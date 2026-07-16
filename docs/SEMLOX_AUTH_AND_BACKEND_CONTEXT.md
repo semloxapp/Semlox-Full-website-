@@ -576,7 +576,8 @@ AWB extraction now persists to the focused `awb_documents` and `awb_fields` tabl
 Persistence rules:
 
 * extraction creates one company-scoped `awb_documents` row and one `awb_fields` row per normalized field
-* `storage_path` remains null until an AWB storage bucket is configured; the selected browser file is still used for the current source preview
+* original source files are stored in the private Supabase Storage bucket `awb-source-documents` during extraction and the path is saved in `awb_documents.storage_path`
+* the selected browser file is still used for immediate local preview after upload; persisted documents use a server-generated signed URL
 * the Review UI retains the real database document ID returned by extraction
 * edited values save through `PATCH /api/awb/documents/[documentId]/fields`
 * Save Draft posts current values to `POST /api/awb/documents/[documentId]/draft`
@@ -607,6 +608,8 @@ Activity History is database-backed through `GET /api/awb/history`:
 * `Open in AWB Processing` navigates to `/dashboard/awb?documentId=<id>` and loads persisted fields without rerunning extraction
 * reopened issued documents are read-only; editable saved documents retain Save Draft and Issue actions
 * when `storage_path` is null, reopened documents show `Source file is not stored yet.` instead of attempting to display the original file
+* when `storage_path` exists, `GET /api/awb/documents/[documentId]` returns a short-lived signed `history.sourceUrl` for the private source file
+* issued AWBs clear `storage_path` and best-effort delete the source file because issued documents no longer need to retain the original upload
 * History CSV exports only the currently filtered API rows and never uses sample data
 * the database wiring preserves the original History UX: pill actions, four gradient-topped metrics, dense date/status/action filters, selectable sortable table with pagination, progress bars, status badges, and the sliding right-side detail drawer
 * History styling follows the shared dashboard light/dark theme and does not replace the dashboard header, sidebar, account menu, or notification controls
@@ -772,3 +775,706 @@ Before editing:
 11. Do not change database schema/RLS without asking.
 
 This document should be read before making backend/auth/team/company-login related changes.
+
+---
+
+## 21. Frontend Architecture and UI Control Flow
+
+The app uses the Next.js App Router. Dashboard screens are mostly client components under `app/dashboard/*` because they depend on authenticated client-side state, company context, UI tabs, local form edits, file uploads, PDF canvas rendering, and optimistic review state.
+
+Important UI entry points:
+
+* `app/page.tsx` - public landing page
+* `app/login/page.tsx` - company/user sign-in UI
+* `app/dashboard/layout.tsx` - authenticated dashboard shell, sidebar, header, account menu, theme controls, notification bell
+* `app/dashboard/page.tsx` - dashboard overview metrics/charts/pending work
+* `app/dashboard/awb/page.tsx` - AWB upload, extraction, review, draft, issue flow
+* `app/dashboard/awb/components/AwbPaperContent.tsx` - visual AWB paper/form renderer and editable paper fields
+* `app/dashboard/history/page.tsx` - AWB history table and detail drawer
+* `app/dashboard/settings/page.tsx` - owner/admin company settings
+* `app/dashboard/settings/components/UserSettingsView.tsx` - employee/user personal settings
+* `app/dashboard/components/UserAccountMenu.tsx` - profile/account dropdown
+* `app/dashboard/components/notifications/*` - notification bell, dropdown, and hook
+* `app/context/CompanyContext.tsx` - selected company/membership context
+* `app/utils/authClient.ts` - frontend auth/membership helper
+
+The UI is controlled by a combination of:
+
+* cookie-authenticated API calls using `credentials: "include"`
+* `CompanyContext` for selected workspace/company
+* local React state for current form edits, view modes, loading states, and modals
+* URL search params for some persisted navigation state such as `documentId`
+* Supabase-backed API routes for all authoritative data
+
+Client state should never be treated as authorization. It is only for UX. Every server route must re-authenticate and verify company/membership access.
+
+---
+
+## 22. Dashboard Shell, Sidebar, Header, and Theme
+
+The dashboard shell provides:
+
+* persistent left sidebar navigation
+* dark fixed header
+* light/dark theme controls
+* filter and notification icons
+* user account menu
+* company/user context display
+* optional collapsed sidebar behavior for more AWB workspace room
+
+The sidebar and header are intentionally dark across themes. Content surfaces switch between light and dark mode. Future UI optimization should keep this split:
+
+* shell/header/sidebar: dark brand surface
+* page content: theme-aware light/dark surfaces
+* buttons: blue primary buttons always use white text
+* settings inner navigation: theme-aware active states, not hardcoded dark backgrounds in light mode
+
+Theme implementation is mostly Tailwind class based, with some global dashboard/AWB CSS in `app/globals.css`. Watch for hardcoded dark colors such as `bg-[#070b17]`, `text-white`, or `border-white/10` inside light-mode content. These need matching `dark:` variants or light-mode defaults.
+
+---
+
+## 23. Company Context and Workspace Selection
+
+`CompanyContext.tsx` manages the selected company and memberships. It loads memberships from:
+
+```text
+GET /api/auth/memberships
+```
+
+Important behavior:
+
+* requests use `credentials: "include"`
+* selected company id should be stable
+* setters should remain memoized/stable to avoid dashboard render loops
+* if no selected company exists and memberships exist, choose a safe default accepted membership
+* dashboard pages should wait for company context before fetching company-scoped APIs
+* login should validate selected company before redirecting to dashboard
+
+Frontend company id is a request parameter only. Backend routes must still verify membership.
+
+---
+
+## 24. Login UI Functional Flow
+
+`app/login/page.tsx` contains two modes:
+
+* Company Sign In - owner/admin company login
+* User Sign In - employee login with selected company
+
+User Sign In:
+
+1. loads public companies from `GET /api/public/companies`
+2. user selects company id from dropdown
+3. user enters email/password
+4. posts `POST /api/auth/login`
+5. posts `POST /api/auth/validate-company`
+6. sets selected company context
+7. redirects to `/dashboard`
+
+Company Sign In:
+
+1. user enters email/password
+2. posts `POST /api/auth/login`
+3. posts `POST /api/auth/resolve-company-login`
+4. selects the owner/admin company
+5. redirects to `/dashboard`
+
+Rules:
+
+* login payload must use `{ email, password }`
+* do not send `username` to `/api/auth/login`
+* use cookie auth after login, not `sessionStorage`
+* company dropdown value must be company id
+* dropdown UI closes on selection and outside click
+
+---
+
+## 25. AWB Processing UI State Machine
+
+`app/dashboard/awb/page.tsx` controls the AWB workflow with phases:
+
+```text
+upload -> processing -> review
+```
+
+Core local state includes:
+
+* selected file
+* local preview URL for newly uploaded file
+* extraction response
+* extraction/loading errors
+* loaded persisted document state
+* document edit permission
+* source stored state
+* current review view (`AWB Form` or `Extracted Fields`)
+* saving/issuing/loading states
+* manual review markers
+* issue confirmation modal state
+
+Upload flow:
+
+1. user chooses or drops PDF/image
+2. frontend validates type and size
+3. local object URL is created for immediate preview
+4. `POST /api/awb/extract` is called with `FormData`
+5. request includes selected `companyId` and `credentials: "include"`
+6. UI shows processing state while server extracts and persists
+7. successful response becomes the source of truth for review
+
+Processing state:
+
+* shows stepper and progress card
+* must be theme-aware in light/dark mode
+* does not expose backend internals
+* failures show retry/choose another actions without changing extraction logic
+
+Review state:
+
+* left side contains AWB Form / Extracted Fields toggle
+* right side contains Source Document viewer
+* summary chips are derived from the same normalized field state
+* paper form and extracted fields share the same `extraction.fields` state
+* source document remains visible independently of left-side toggle
+
+---
+
+## 26. AWB Extraction API and Persistence Flow
+
+`POST /api/awb/extract` is the only browser-facing extraction endpoint.
+
+Server behavior:
+
+1. authenticate request from cookie/Bearer token
+2. parse `FormData`
+3. validate file type and size
+4. validate selected company membership
+5. create AWB event `extraction_started`
+6. run mock/live/fallback extraction
+7. normalize provider response
+8. create `awb_documents` row
+9. upload original source file to private Supabase Storage bucket `awb-source-documents`
+10. update `awb_documents.storage_path`
+11. create `awb_fields` rows
+12. create AWB event `extraction_completed`
+13. return normalized extraction response
+
+Failure behavior:
+
+* provider failures create a failed document where possible
+* failed source files are also stored when the failed document is created
+* notification/event writes are best-effort
+* no passwords/tokens/cookies/full files are logged
+
+Storage details:
+
+* bucket: `awb-source-documents`
+* bucket should be private
+* service role uploads/deletes/signs files server-side
+* path shape is company/document/file-name based
+* client never receives service role key
+* `GET /api/awb/documents/[documentId]` returns signed source URL only after membership authorization
+* issued documents delete source file and clear `storage_path`
+
+---
+
+## 27. AWB Review Field State and Mapping
+
+The normalized extraction field structure is the UI/backend contract:
+
+```ts
+{
+  key: string;
+  label: string;
+  value: string;
+  confidence: number;
+  confidencePercent: number;
+  needsReview: boolean;
+  status: "valid" | "warning" | "missing";
+  color: "blue" | "green" | "yellow" | "red";
+  comment?: string;
+  page?: number;
+  source?: string;
+}
+```
+
+Field stats must be derived from `extraction.fields`, not separate hardcoded UI counters.
+
+Important mappings:
+
+* `awb_number` is the AWB number
+* `reference_number` is separate from AWB number
+* provider date currently maps to `executed_on_date`, not requested flight date
+* `pieces` maps to number of pieces and pieces line where needed
+* `gross_weight` maps to gross weight and weight line where needed
+* `chargeable_weight`, `weight_unit`, and goods details drive AWB form fields
+
+Manual accept/tick behavior:
+
+* review/warning/missing fields can be accepted as correct
+* the tick button does not require changing text
+* accepted field becomes valid/manually reviewed in local review state
+* draft/issue actions persist current field values/status through server routes
+
+Optimization note:
+
+* keep one field state object as the source of truth
+* avoid separate counters for form, extracted fields, and summary chips
+* keep all paper-field mappings centralized to avoid reference/AWB/date mistakes
+
+---
+
+## 28. AWB Paper Form UI
+
+`AwbPaperContent.tsx` renders the visual AWB paper form. It is intentionally different from a simple input table because it mimics the paper AWB layout.
+
+Responsibilities:
+
+* render AWB cells and section borders
+* show confidence badges
+* show missing/review coloring
+* allow editing mapped fields
+* allow manual accept/tick of review fields
+* call parent handlers for value changes and acceptance
+* provide Save Draft and Issue/Export buttons in paper context
+
+Important layout rules learned during fixes:
+
+* avoid mixing percentage row heights and `minmax(auto)` rows carelessly
+* input areas should stay inside their parent cell
+* disabled/placeholder cells need stable height and padding
+* avoid double borders by deciding whether parent grid or child cell owns borders
+* confidence badges and accept buttons must not push text outside cells
+* accept/tick buttons should sit in the lower-right of the cell and not disturb text
+
+Known optimization area:
+
+* consolidate AWB paper cell variants into stable data-cell and placeholder-cell modes
+* centralize border ownership to reduce missing/double border bugs
+* reduce legacy/commented code inside `AwbPaperContent.tsx`
+
+---
+
+## 29. Source Document PDF Viewer
+
+The Source Document viewer is controlled in `app/dashboard/awb/page.tsx` inside `UploadedPdfPanel`.
+
+Current behavior:
+
+* newly uploaded files use a browser `blob:` object URL for immediate preview
+* persisted draft/review files use signed Supabase Storage URLs
+* PDF rendering uses PDF.js canvas controlled by the app
+* source magnifier is enabled by default
+* magnifier reads pixels from the controlled canvas, not a native PDF iframe
+* page count/page number and zoom state are local UI state
+
+Why PDF.js canvas is used:
+
+* native iframe/browser PDF viewers cannot expose reliable internal page coordinates
+* magnifier needs controlled DOM/canvas pixels to zoom accurately
+
+Important implementation details:
+
+* object URLs should only be revoked when they start with `blob:`
+* signed HTTPS URLs must not be passed to `URL.revokeObjectURL`
+* canvas render quality is device-pixel-ratio aware
+* magnifier canvas is mounted when magnifier is enabled and hidden via opacity until pointer coordinates exist
+* lens should attach to actual canvas/page area, not the full card/header
+
+Optimization note:
+
+* PDF.js rendering can be heavy; avoid rendering all pages at once
+* only current page should render unless a virtualized multi-page viewer is intentionally added
+
+---
+
+## 30. Save Draft, Reopen, and Issue AWB
+
+Save Draft:
+
+```text
+POST /api/awb/documents/[documentId]/draft
+```
+
+Frontend sends current field values:
+
+```json
+{
+  "fields": [
+    { "key": "awb_number", "value": "..." }
+  ]
+}
+```
+
+Backend:
+
+* authenticates user
+* verifies document/company access
+* updates changed fields
+* sets document status to `draft`
+* creates event `draft_saved`
+
+Reopen persisted document:
+
+```text
+GET /api/awb/documents/[documentId]
+```
+
+Backend:
+
+* authenticates user
+* verifies company access and upload/admin permission
+* loads document and fields
+* returns normalized extraction response
+* returns `history.canEdit`
+* returns `history.storagePath`
+* returns signed `history.sourceUrl` if source exists and document is not issued
+
+Issue AWB:
+
+```text
+POST /api/awb/documents/[documentId]/issue
+```
+
+Backend:
+
+* authenticates user
+* verifies allowed role
+* saves latest fields
+* validates required fields
+* sets document status to `issued`
+* clears `storage_path`
+* best-effort deletes source file from storage
+* creates event `issued`
+
+Frontend:
+
+* asks for confirmation
+* calls issue route
+* only after success generates/downloads final PDF
+* updates UI to issued/read-only state
+
+---
+
+## 31. Final AWB PDF Generation
+
+The current client downloads issued PDFs through the first-party document route:
+
+```text
+/api/awb/documents/[documentId]/pdf
+```
+
+The route verifies document access, requires `status = "issued"`, loads stored
+fields server-side, maps them to the PDF service payload, and streams the PDF
+back to the browser. The browser no longer posts AWB field payloads directly to
+the external PDF generation service.
+
+Important:
+
+* this is separate from the extraction provider
+* this should not be called before the server-side issue route succeeds
+* frontend calls must use `credentials: "include"`
+* do not change this without confirming because it affects final document export behavior
+
+---
+
+## 32. History Page UI and API Flow
+
+`app/dashboard/history/page.tsx` loads dynamic history from:
+
+```text
+GET /api/awb/history
+```
+
+Query params include:
+
+* selected company id
+* scope (`my` or `company`)
+* status/date/search filters where supported
+
+UI behavior:
+
+* table is paginated
+* filters are local UI controls backed by API data
+* date picker uses custom SemLoX calendar UI
+* detail drawer loads selected document through `GET /api/awb/documents/[documentId]`
+* `Open` navigates to `/dashboard/awb?documentId=<id>`
+
+Authorization:
+
+* owner/admin can view company scope
+* other roles can view their own documents only
+* backend enforces this regardless of UI tabs
+
+Optimization areas:
+
+* avoid duplicate `GET /api/auth/memberships` calls from multiple mounted components
+* consider shared request caching for history/detail fetches
+* keep history table server-backed, not dummy/static
+
+---
+
+## 33. Dashboard Overview UI and API Flow
+
+`app/dashboard/page.tsx` loads metrics from:
+
+```text
+GET /api/dashboard/user?companyId=...&range=...
+GET /api/dashboard/company?companyId=...&range=...
+```
+
+The selected scope determines endpoint:
+
+* `user` scope for current user's documents
+* `company` scope for owner/admin company overview
+
+UI includes:
+
+* KPI cards
+* trend/status/team charts
+* AI quality signal blocks
+* completion vs pending work blocks
+* pending work table
+* active documents
+* recent activity/exceptions
+
+Important:
+
+* scope toggle is UX only; backend validates owner/admin before company metrics
+* dashboard fetch should wait for selected company id
+* dashboard should not refetch in an infinite loop
+* `setSelectedCompanyId` should not be called repeatedly with same value
+
+Optimization areas:
+
+* centralize dashboard fetch/loading state
+* avoid duplicate membership initialization
+* normalize pending work and history status calculations from the same backend data model
+
+---
+
+## 34. Settings UI and API Flow
+
+`app/dashboard/settings/page.tsx` chooses between:
+
+* company administration settings for owner/admin
+* user settings for manager/operator/viewer
+
+Company settings include:
+
+* company profile
+* team members
+* API & webhooks
+* integrations
+* notifications
+* security
+* billing & plan
+
+User settings include:
+
+* profile
+* account/security
+* notifications
+* preferences
+* workspace info
+
+Team Members flow:
+
+* load members with `GET /api/company/members?companyId=...`
+* add member with `POST /api/invite`
+* update role/resend/remove through `/api/company/members`
+* all requests use `credentials: "include"`
+* owner/admin access verified server-side
+* manual refresh button reloads latest accepted/invited status
+
+User Settings APIs:
+
+* `GET /api/user/profile`
+* `PATCH /api/user/profile`
+* `POST /api/user/avatar`
+* `POST /api/user/password-reset`
+* `GET/PATCH /api/user/notifications`
+
+Optimization areas:
+
+* keep settings tab switching local and avoid full dashboard shell remount
+* avoid re-fetching profile/memberships more than necessary
+* keep company settings and user settings style consistent in light/dark mode
+
+---
+
+## 35. Notifications UI and API Flow
+
+Notification UI is in the dashboard header and uses:
+
+```text
+app/dashboard/components/notifications/useNotifications.ts
+```
+
+Client calls:
+
+* `GET /api/notifications`
+* `PATCH /api/notifications`
+* `POST /api/notifications/mark-all-read`
+* `POST /api/notifications/archive`
+
+All requests use cookie auth with `credentials: "include"`.
+
+Behavior:
+
+* dropdown shows visible notifications and unread count
+* direct notifications use row-level read/archive fields
+* shared notifications use `notification_receipts` per user
+* mark-all-read only marks current user's visible notifications
+* archive only archives for current user
+* workspace announcement modal creates one shared company notification
+
+Optimization areas:
+
+* avoid polling too frequently
+* debounce/serialize read/archive actions if needed
+* keep notification creation server-side and best-effort
+
+---
+
+## 36. API Calling Patterns
+
+Frontend protected requests must include:
+
+```ts
+credentials: "include"
+```
+
+Common client calls:
+
+* `GET /api/auth/memberships`
+* `POST /api/auth/login`
+* `POST /api/auth/validate-company`
+* `POST /api/auth/resolve-company-login`
+* `POST /api/auth/signout`
+* `GET /api/public/companies`
+* `GET /api/dashboard/user`
+* `GET /api/dashboard/company`
+* `POST /api/awb/extract`
+* `GET /api/awb/history`
+* `GET /api/awb/documents/[documentId]`
+* `POST /api/awb/documents/[documentId]/draft`
+* `POST /api/awb/documents/[documentId]/issue`
+* `GET/PATCH/POST /api/company/members`
+* `POST /api/invite`
+* `GET/PATCH/POST /api/notifications/*`
+* `GET/PATCH/POST /api/user/*`
+
+Server-side Supabase access patterns:
+
+* direct Supabase REST calls with service role for privileged backend operations
+* Supabase Auth user lookup through access token/cookie
+* Supabase Storage service role for private file upload/delete/signed URLs
+
+Do not move service-role operations to the browser.
+
+---
+
+## 37. Loading, Error, and Empty State Rules
+
+Current UI patterns:
+
+* upload/extraction has phase-specific loading and retry states
+* dashboard has loading state while company context/API data is pending
+* settings tables keep existing data visible during refresh when possible
+* team member refresh disables only the refresh button
+* notification errors should not break dashboard render
+* source viewer shows explicit missing source message when no stored file is available
+
+Rules for future optimization:
+
+* do not redirect to login while auth/memberships are still loading
+* do not repeatedly spam failed 401 requests
+* show one clean session-expired message when truly unauthorized
+* do not clear useful existing data during background refresh
+* keep API error responses structured and user friendly
+
+---
+
+## 38. Backend Optimization Areas for Review
+
+Potential backend improvements a developer can evaluate:
+
+* replace repeated raw Supabase REST fetch helpers with a typed service client wrapper
+* add shared request caching where safe for memberships/profile/company context
+* move final AWB PDF generation behind an authenticated first-party API route
+* reduce duplicate `GET /api/auth/memberships` calls between layout, dashboard, settings, and user menu
+* add indexes only after measuring query plans; do not change schema blindly
+* audit `AwbPaperContent.tsx` for legacy direct fetch calls and remove or isolate dead code carefully
+* centralize AWB field schema/mapping in one module used by normalizer, paper UI, final PDF payload, validation, and dashboard stats
+* consider background cleanup for orphaned source files if upload/persistence is interrupted
+* add server-side pagination/filtering to history if row counts grow significantly
+* add typed response contracts for core API routes
+
+---
+
+## 39. UI Optimization Areas for Review
+
+Potential frontend improvements a developer can evaluate:
+
+* split `app/dashboard/awb/page.tsx` into smaller components without changing behavior
+* create reusable hooks for AWB extraction, document loading, draft save, issue flow, and PDF source loading
+* centralize AWB review stats computation so summary chips, extracted fields, and paper form always agree
+* replace repeated Tailwind fragments with small local components where it reduces bugs
+* keep AWB paper layout stable by consolidating cell variants and border rules
+* virtualize or paginate very large extracted-field lists if future schema grows
+* reduce unnecessary re-renders caused by unstable context values or inline object dependencies
+* keep left/right AWB workspace ratio intentional; do not accidentally switch from 60/40 to 50/50 unless product asks
+* preserve the controlled PDF.js canvas for magnifier; do not return to native iframe magnifier
+* ensure light and dark mode are both verified for every modal, chip, button, input, and card
+
+---
+
+## 40. Production Deployment Notes
+
+Deployment target:
+
+```text
+Vercel
+```
+
+Production environment variables should include:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=
+SITE_URL=
+AWB_EXTRACTION_MODE=
+AWB_EXTRACTION_API_URL=
+AWB_EXTRACTION_TIMEOUT_MS=
+AWB_EXTRACTION_API_KEY=
+AWB_SOURCE_BUCKET=awb-source-documents
+```
+
+Notes:
+
+* `AWB_SOURCE_BUCKET` is optional because code defaults to `awb-source-documents`
+* production login requires env vars in Vercel, not only local `.env.local`
+* after env var changes, redeploy the Vercel project
+* the Supabase Storage bucket for AWB sources must be private
+* service role key must never use a `NEXT_PUBLIC_` prefix
+* build may need network access for Next Google font fetching
+
+---
+
+## 41. Current High-Risk Files
+
+Be careful editing these files:
+
+* `app/dashboard/awb/page.tsx` - large client component controlling upload, extraction, review, PDF viewer, draft, issue
+* `app/dashboard/awb/components/AwbPaperContent.tsx` - dense AWB paper layout and field mapping
+* `lib/awb/normalizeAwbExtraction.ts` - maps provider output to app field schema
+* `lib/awb/persistence.ts` - document/field persistence, storage, history, issue/draft helpers
+* `app/context/CompanyContext.tsx` - selected company and membership state
+* `app/dashboard/layout.tsx` - dashboard shell, header, sidebar, notification/account controls
+* `app/api/auth/login/route.ts` - session cookie creation
+* `lib/auth.ts` - cookie/Bearer token extraction and user validation
+
+For these files, prefer small diffs, targeted tests, and explicit before/after behavior checks.

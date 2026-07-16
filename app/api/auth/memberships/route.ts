@@ -1,29 +1,44 @@
-import { extractBearerTokenFromRequest, getUserFromAccessToken, getMembershipsByUserId } from "@/lib/auth";
-import { supabaseUrl, supabaseServiceRoleKey } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
-function jsonResponse(body: any, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+function jsonResponse(body: unknown, status = 200) {
+  return NextResponse.json(body, { status });
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const route = "GET /api/auth/memberships";
-  const token = extractBearerTokenFromRequest(request);
-  if (!token) return jsonResponse({ ok: false, code: "UNAUTHORIZED", message: "Your session expired. Please sign in again." }, 401);
 
   try {
-    const user = await getUserFromAccessToken(token);
-    if (!user || !user.id) return jsonResponse({ ok: false, code: "UNAUTHORIZED", message: "Your session expired. Please sign in again." }, 401);
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    const memberships = await getMembershipsByUserId(user.id);
-    // Ensure we return only the fields needed by the client
-    const sanitized = Array.isArray(memberships)
-      ? memberships.map((m: any) => ({ company_id: m.company_id, role: m.role, accepted_at: m.accepted_at }))
-      : [];
-    return jsonResponse({ ok: true, memberships: sanitized }, 200);
+    if (userError || !user) {
+      return jsonResponse(
+        { ok: false, code: "UNAUTHORIZED", message: "Your session expired. Please sign in again." },
+        401
+      );
+    }
+
+    const service = createSupabaseServiceClient();
+    const { data, error } = await service
+      .from("memberships")
+      .select("company_id, role, accepted_at")
+      .eq("user_id", user.id);
+
+    if (error) throw error;
+
+    return jsonResponse({ ok: true, memberships: data ?? [] }, 200);
   } catch (err: any) {
     if (process.env.NODE_ENV !== "production") console.log(route, "error", err?.message || err);
-    return jsonResponse({ ok: false, code: "AUTH_SERVICE_ERROR", message: "Failed to fetch memberships" }, 500);
+    return jsonResponse(
+      { ok: false, code: "AUTH_SERVICE_ERROR", message: "Failed to fetch memberships" },
+      500
+    );
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

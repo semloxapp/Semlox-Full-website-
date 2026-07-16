@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type ChangeEvent,
   type DragEvent,
@@ -12,7 +13,9 @@ import {
   useState,
 } from "react";
 import { useCompany } from "../../context/CompanyContext";
-import { fetchMemberships } from "../../utils/authClient";
+import { awbHistoryQueryKeys } from "../../hooks/queries/useAwbHistory";
+import { dashboardQueryKeys } from "../../hooks/queries/useDashboardData";
+import { membershipErrorStatus, useMemberships } from "../../hooks/queries/useMemberships";
 import {
   Activity,
   Bell,
@@ -57,7 +60,6 @@ const REQUIRED_AWB_FIELDS = [
   "origin_airport",
   "destination_airport",
   "issuing_carrier",
-  "flight_date",
   "pieces",
   "gross_weight",
   "chargeable_weight",
@@ -69,6 +71,10 @@ function responseMessage(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object") return fallback;
   const message = (payload as Record<string, unknown>).message;
   return typeof message === "string" && message ? message : fallback;
+}
+
+function revokeLocalObjectUrl(url: string | null) {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
 function validateAwbFile(file: File) {
@@ -98,11 +104,12 @@ function awbPayloadFromExtraction(extraction: AwbExtractionResponse) {
   return {
     airport_departure: values.origin_airport,
     airport_destination: values.destination_airport,
-    reference_number: values.awb_number,
+    awb_number: values.awb_number,
+    reference_number: values.reference_number,
     shipper_address: values.shipper_name_address,
     consignee_address: values.consignee_name_address,
     issued_by: values.issuing_carrier,
-    flight_date: values.flight_date,
+    executed_on_date: values.executed_on_date,
     pieces_value: values.pieces,
     pieces_line: values.pieces_line,
     gross_weight: values.gross_weight,
@@ -112,28 +119,6 @@ function awbPayloadFromExtraction(extraction: AwbExtractionResponse) {
     handling_info: values.handling_information,
     goods_description: values.nature_and_quantity_of_goods,
     dimensions_or_volume: values.goods_dimensions_or_volume,
-  };
-}
-
-function finalPdfPayloadFromExtraction(extraction: AwbExtractionResponse) {
-  const values = Object.fromEntries(
-    extraction.fields.map((field) => [field.key, field.value])
-  ) as Record<string, string>;
-  return {
-    shipper_address: values.shipper_name_address || "",
-    consignee_address: values.consignee_name_address || "",
-    issued_by: values.issuing_carrier || "",
-    airport_departure: values.origin_airport || "",
-    airport_destination: values.destination_airport || "",
-    reference_number: values.awb_number || "",
-    flight_date: values.flight_date || "",
-    pieces_value: values.pieces || "",
-    gross_weight: values.gross_weight || "",
-    chargeable_weight: values.chargeable_weight || "",
-    weight_unit: values.weight_unit || "",
-    handling_info: values.handling_information || "",
-    goods_description: values.nature_and_quantity_of_goods || "",
-    dimensions_or_volume: values.goods_dimensions_or_volume || "",
   };
 }
 
@@ -148,13 +133,14 @@ function validateReviewForIssue(fields: AwbExtractedField[]) {
 }
 
 const PAPER_PAYLOAD_TO_FIELD_KEY: Record<string, string> = {
-  reference_number: "awb_number",
+  awb_number: "awb_number",
+  reference_number: "reference_number",
   shipper_address: "shipper_name_address",
   consignee_address: "consignee_name_address",
   airport_departure: "origin_airport",
   airport_destination: "destination_airport",
   issued_by: "issuing_carrier",
-  flight_date: "flight_date",
+  executed_on_date: "executed_on_date",
   pieces_value: "pieces",
   pieces_line: "pieces_line",
   gross_weight: "gross_weight",
@@ -394,6 +380,7 @@ function AwbDocumentPreview({
   onSaveDraft,
   onExportFinalPdf,
   onPaperFieldChange,
+  onPaperFieldConfirm,
   savingDraft,
   exportingPdf,
   readOnly,
@@ -403,6 +390,7 @@ function AwbDocumentPreview({
   onSaveDraft: () => void;
   onExportFinalPdf: () => void;
   onPaperFieldChange: (payloadKey: string, value: string) => void;
+  onPaperFieldConfirm: (payloadKey: string) => void;
   savingDraft: boolean;
   exportingPdf: boolean;
   readOnly: boolean;
@@ -453,6 +441,7 @@ function AwbDocumentPreview({
             onSaveDraft={onSaveDraft}
             onExportFinalPdf={onExportFinalPdf}
             onFieldChange={onPaperFieldChange}
+            onFieldConfirm={onPaperFieldConfirm}
             savingDraft={savingDraft}
             exportingPdf={exportingPdf}
             showActions={false}
@@ -1105,11 +1094,13 @@ function fieldColorClasses(field: AwbExtractedField) {
 function ExtractedFieldsPanel({
   extraction,
   onFieldChange,
+  onFieldConfirm,
   manuallyReviewedKeys,
   readOnly = false,
 }: {
   extraction: AwbExtractionResponse;
   onFieldChange: (key: string, value: string) => void;
+  onFieldConfirm: (key: string) => void;
   manuallyReviewedKeys: Set<string>;
   readOnly?: boolean;
 }) {
@@ -1155,6 +1146,15 @@ function ExtractedFieldsPanel({
           const colors = fieldColorClasses(field);
           const isDirty = Object.hasOwn(editingValues, field.key);
           const editingValue = isDirty ? editingValues[field.key] : field.value;
+          const canConfirmField =
+            !readOnly &&
+            !isDirty &&
+            field.color !== "blue" &&
+            (field.needsReview ||
+              field.status === "review" ||
+              field.status === "warning" ||
+              field.status === "missing" ||
+              field.confidence < 0.95);
           return (
             <article
               key={field.key}
@@ -1171,6 +1171,17 @@ function ExtractedFieldsPanel({
                     <span className={`shrink-0 font-mono text-[9px] font-bold ${colors.text}`}>
                       {field.confidencePercent}%
                     </span>
+                    {canConfirmField ? (
+                      <button
+                        type="button"
+                        onClick={() => onFieldConfirm(field.key)}
+                        className="awb-field-confirm-button inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-400/[0.12] text-emerald-300 transition hover:border-emerald-300/70 hover:bg-emerald-400/20 hover:text-emerald-200"
+                        title="Mark as OK"
+                        aria-label={`Mark ${field.label} as OK`}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                      </button>
+                    ) : null}
                   </div>
                   <textarea
                     value={editingValue}
@@ -1258,6 +1269,7 @@ function ReviewView({
   canEdit: boolean;
   sourceStored: boolean;
 }) {
+  const queryClient = useQueryClient();
   const [reviewView, setReviewView] = useState<"form" | "fields">("form");
   const [savingDraft, setSavingDraft] = useState(false);
   const [issuing, setIssuing] = useState(false);
@@ -1307,6 +1319,35 @@ function ReviewView({
     setActionNotice(null);
   };
 
+  const confirmFieldValue = (key: string) => {
+    if (!canEdit) return;
+    let confirmed = false;
+    const fields = extraction.fields.map((field) => {
+      if (field.key !== key) return field;
+      confirmed = true;
+      return {
+        ...field,
+        needsReview: false,
+        status: "valid" as const,
+        color: "blue" as const,
+        comment: "Manually reviewed",
+      };
+    });
+    if (!confirmed) return;
+    onExtractionChange({
+      ...extraction,
+      fields,
+      summary: summarizeReviewFields(fields),
+    });
+    setManuallyReviewedKeys((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+    setIsDirty(true);
+    setActionNotice(null);
+  };
+
   const saveDraft = async (): Promise<boolean> => {
     setSavingDraft(true);
     setActionNotice(null);
@@ -1333,6 +1374,8 @@ function ReviewView({
       });
       setIsDirty(false);
       setActionNotice({ type: "success", message: payload?.message || "Draft saved." });
+      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: awbHistoryQueryKeys.all });
       return true;
     } catch {
       setActionNotice({ type: "error", message: "Unable to save the AWB draft." });
@@ -1352,10 +1395,8 @@ function ReviewView({
   };
 
   const downloadFinalPdf = async () => {
-    const response = await fetch("https://semloxai.vercel.app/api/generate-awb", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(finalPdfPayloadFromExtraction(extraction)),
+    const response = await fetch(`/api/awb/documents/${extraction.document.id}/pdf`, {
+      credentials: "include",
     });
     if (!response.ok) throw new Error("Final PDF generation failed");
 
@@ -1420,6 +1461,8 @@ function ReviewView({
       });
       setIsDirty(false);
       setActionNotice({ type: "success", message: "AWB issued successfully." });
+      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: awbHistoryQueryKeys.all });
       try {
         await downloadFinalPdf();
       } catch {
@@ -1660,6 +1703,7 @@ function ReviewView({
               <ExtractedFieldsPanel
                 extraction={extraction}
                 onFieldChange={updateFieldValue}
+                onFieldConfirm={confirmFieldValue}
                 manuallyReviewedKeys={manuallyReviewedKeys}
                 readOnly={!canEdit}
               />
@@ -1677,6 +1721,10 @@ function ReviewView({
                 onPaperFieldChange={(payloadKey, value) => {
                   const fieldKey = PAPER_PAYLOAD_TO_FIELD_KEY[payloadKey];
                   if (fieldKey) updateFieldValue(fieldKey, value);
+                }}
+                onPaperFieldConfirm={(payloadKey) => {
+                  const fieldKey = PAPER_PAYLOAD_TO_FIELD_KEY[payloadKey];
+                  if (fieldKey) confirmFieldValue(fieldKey);
                 }}
                 savingDraft={savingDraft}
                 exportingPdf={issuing}
@@ -1951,6 +1999,18 @@ function ReviewView({
           border-color: rgba(47, 128, 255, 0.7) !important;
         }
 
+        .dashboard-theme-light .awb-review-page .awb-field-confirm-button {
+          background-color: #dcfce7 !important;
+          border-color: #86efac !important;
+          color: #047857 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-field-confirm-button:hover {
+          background-color: #bbf7d0 !important;
+          border-color: #4ade80 !important;
+          color: #065f46 !important;
+        }
+
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar button,
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel button,
         .dashboard-theme-light .awb-review-page [role="tab"] {
@@ -2056,7 +2116,7 @@ function AwbProcessingPageContent() {
     setUploadError("");
     setSelectedFile(file);
     setPdfUrl((currentUrl) => {
-      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      revokeLocalObjectUrl(currentUrl);
       return URL.createObjectURL(file);
     });
     void runExtraction(file);
@@ -2073,17 +2133,18 @@ function AwbProcessingPageContent() {
   };
 
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
+  const membershipsQuery = useMemberships();
 
   useEffect(() => {
-    let mounted = true;
-    async function checkSession() {
-      if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] checking memberships");
-      const res = await fetchMemberships();
-      if (!mounted) return;
+    if (membershipsQuery.isPending) return;
+    let cancelled = false;
 
-      if (!res.ok) {
-        if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", res.status);
-        if (res.status === 401 || res.status === 403) {
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (membershipsQuery.isError) {
+        const status = membershipErrorStatus(membershipsQuery.error);
+        if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", status);
+        if (status === 401 || status === 403) {
           if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] redirect reason: unauthorized");
           router.replace("/login");
           return;
@@ -2092,7 +2153,7 @@ function AwbProcessingPageContent() {
         return;
       }
 
-      const memberships = res.memberships || [];
+      const memberships = membershipsQuery.data || [];
       if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", 200, memberships.length);
 
       if (!selectedCompanyId && memberships.length === 1) {
@@ -2102,15 +2163,19 @@ function AwbProcessingPageContent() {
       }
 
       setAllowed(true);
-    }
-
-    checkSession();
-    window.addEventListener("pageshow", checkSession);
+    });
     return () => {
-      mounted = false;
-      window.removeEventListener("pageshow", checkSession);
+      cancelled = true;
     };
-  }, [router, selectedCompanyId, setSelectedCompanyId]);
+  }, [
+    membershipsQuery.data,
+    membershipsQuery.error,
+    membershipsQuery.isError,
+    membershipsQuery.isPending,
+    router,
+    selectedCompanyId,
+    setSelectedCompanyId,
+  ]);
 
   useEffect(() => {
     if (!allowed || !requestedDocumentId) return;
@@ -2125,12 +2190,16 @@ function AwbProcessingPageContent() {
         }
         if (!mounted) return;
         const loaded = payload.data as AwbExtractionResponse & {
-          history?: { canEdit?: boolean; storagePath?: string | null };
+          history?: {
+            canEdit?: boolean;
+            storagePath?: string | null;
+            sourceUrl?: string | null;
+          };
         };
         setSelectedFile(null);
         setPdfUrl((currentUrl) => {
-          if (currentUrl) URL.revokeObjectURL(currentUrl);
-          return null;
+          revokeLocalObjectUrl(currentUrl);
+          return loaded.history?.sourceUrl || null;
         });
         setExtraction(loaded);
         setDocumentCanEdit(Boolean(loaded.history?.canEdit));
@@ -2153,7 +2222,7 @@ function AwbProcessingPageContent() {
 
   useEffect(() => {
     return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      revokeLocalObjectUrl(pdfUrl);
     };
   }, [pdfUrl]);
 
@@ -2224,7 +2293,7 @@ function AwbProcessingPageContent() {
             return;
           }
           setPdfUrl((currentUrl) => {
-            if (currentUrl) URL.revokeObjectURL(currentUrl);
+            revokeLocalObjectUrl(currentUrl);
             return null;
           });
           setSelectedFile(null);

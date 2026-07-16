@@ -3,9 +3,18 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCompany } from "../../context/CompanyContext";
-import { fetchMemberships } from "../../utils/authClient";
+import { type CompanyMember, useCompanyMembersQuery } from "../../hooks/queries/useCompanyMembers";
+import { membershipErrorStatus, useMemberships } from "../../hooks/queries/useMemberships";
+import type { Membership } from "../../types/membership";
 import UserSettingsView from "./components/UserSettingsView";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { FormField } from "../../components/ui/FormField";
+import { Input } from "../../components/ui/Input";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Select } from "../../components/ui/Select";
+import { Textarea } from "../../components/ui/Textarea";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Bell,
@@ -179,11 +188,7 @@ type SettingsSection =
 
 type UserSettingsSection = "profile" | "security" | "notifications" | "preferences" | "workspace";
 
-type AuthMembership = {
-  company_id: string;
-  role: string;
-  accepted_at?: string | null;
-};
+type AuthMembership = Membership;
 
 const settingsGroups: Array<{
   label: string;
@@ -284,6 +289,7 @@ function SettingsSideNav({
   );
 }
 
+// Legacy helpers retained for Settings sections outside the Company Profile migration scope.
 function FieldRow({
   label,
   hint,
@@ -317,87 +323,90 @@ function CompanyProfile() {
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden px-7 py-4">
       <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-7">
-        <div>
-          <h2 className="text-[22px] font-extrabold tracking-[-0.045em] text-white">
-            Company Profile
-          </h2>
-          <p className="mt-1 text-[11px] text-[#64748B]">Configure your company profile</p>
-        </div>
+        <PageHeader title="Company Profile" description="Configure your company profile" />
 
-      <div className="mt-5 rounded-[10px] border border-white/[0.10] bg-white/[0.025]">
-        <div className="border-b border-white/[0.08] px-4 py-3">
-          <h3 className="text-[12px] font-extrabold text-white">Company Information</h3>
-          <p className="mt-1 text-[9px] text-[#64748B]">
+      <Card className="mt-4">
+        <div className="border-b border-[var(--semlox-interactive-border)] px-4 py-3.5">
+          <h2 className="semlox-section-title">Company Information</h2>
+          <p className="semlox-metadata mt-1">
             Business details shown on all AWBs and invoices
           </p>
         </div>
 
         <div className="px-4">
-          <FieldRow
+          <FormField
+            htmlFor="company-logo-upload"
+            descriptionId="company-logo-help"
             label="Company Logo"
-            hint="PNG or SVG, max 2 MB. Displayed on issued AWBs."
+            description="PNG or SVG, max 2 MB. Displayed on issued AWBs."
           >
-            <div className="flex items-center gap-2">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] text-[16px] font-extrabold text-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="semlox-section-title flex h-12 w-12 items-center justify-center rounded-[var(--semlox-radius-control)] bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] text-[var(--semlox-text-inverse)]">
                 DB
               </div>
-              <button className="flex h-7 items-center gap-1.5 rounded-[6px] border border-white/[0.10] bg-white/[0.03] px-3 text-[10px] font-semibold text-[#64748B] hover:text-white">
+              <Button id="company-logo-upload" variant="secondary" size="compact" aria-describedby="company-logo-help">
                 <Upload className="h-3 w-3" />
                 Upload new
-              </button>
-              <button className="flex h-7 items-center gap-1.5 rounded-[6px] border border-[#EF4444]/45 bg-[#EF4444]/10 px-3 text-[10px] font-semibold text-[#EF4444]">
+              </Button>
+              <Button variant="danger" size="compact">
                 <Lock className="h-3 w-3" />
                 Remove
-              </button>
+              </Button>
             </div>
-          </FieldRow>
+          </FormField>
 
-          <FieldRow label="Legal Name" hint="Official business name as registered.">
-            <TextInput defaultValue="DB Schenker Logistics GmbH" />
-          </FieldRow>
+          <FormField htmlFor="company-legal-name" descriptionId="company-legal-name-help" label="Legal Name" description="Official business name as registered.">
+            <Input id="company-legal-name" aria-describedby="company-legal-name-help" defaultValue="DB Schenker Logistics GmbH" />
+          </FormField>
 
-          <FieldRow label="Tax / VAT ID" hint="Used on customs declarations.">
-            <TextInput defaultValue="DE-198 749 023" />
-          </FieldRow>
+          <FormField htmlFor="company-vat-id" descriptionId="company-vat-id-help" label="Tax / VAT ID" description="Used on customs declarations.">
+            <Input id="company-vat-id" aria-describedby="company-vat-id-help" defaultValue="DE-198 749 023" />
+          </FormField>
 
-          <FieldRow label="Headquarters Address" hint="Primary business location.">
-            <textarea
+          <FormField htmlFor="company-address" descriptionId="company-address-help" label="Headquarters Address" description="Primary business location.">
+            <Textarea
+              id="company-address"
+              aria-describedby="company-address-help"
               defaultValue={"Edmund-Rumpler-Strasse 3\n60549 Frankfurt am Main\nGermany"}
-              className="min-h-[54px] w-full resize-y rounded-[7px] border border-[#2F80FF]/70 bg-white/[0.045] px-3 py-2 text-[11px] font-semibold leading-[1.35] text-white outline-none"
             />
-          </FieldRow>
+          </FormField>
 
-          <FieldRow label="Contact Email" hint="For account notifications and billing.">
+          <FormField htmlFor="company-contact-email" descriptionId="company-contact-email-help" label="Contact Email" description="For account notifications and billing.">
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#475569]" />
-              <input
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-[var(--semlox-icon-md)] w-[var(--semlox-icon-md)] -translate-y-1/2 text-[var(--semlox-text-muted)]" />
+              <Input
+                id="company-contact-email"
+                type="email"
+                aria-describedby="company-contact-email-help"
                 defaultValue="ops@schenker.de"
-                className="h-8 w-full rounded-[7px] border border-white/[0.12] bg-white/[0.045] pl-8 pr-3 text-[11px] font-semibold text-white outline-none transition focus:border-[#2F80FF] focus:bg-white/[0.06]"
+                className="pl-8"
               />
             </div>
-          </FieldRow>
+          </FormField>
 
-          <FieldRow label="Time Zone" hint="Affects timestamps shown in the dashboard.">
-            <select
+          <FormField htmlFor="company-timezone" descriptionId="company-timezone-help" label="Time Zone" description="Affects timestamps shown in the dashboard.">
+            <Select
+              id="company-timezone"
+              aria-describedby="company-timezone-help"
               defaultValue="Europe/Berlin (CET)"
-              className="h-8 w-full rounded-[7px] border border-white/[0.12] bg-[#151925] px-3 text-[11px] font-semibold text-white outline-none focus:border-[#2F80FF]"
+              className="w-full"
             >
               <option>Europe/Berlin (CET)</option>
               <option>Asia/Karachi (PKT)</option>
               <option>UTC</option>
-            </select>
-          </FieldRow>
+            </Select>
+          </FormField>
         </div>
-      </div>
+      </Card>
       </div>
 
-      <div className="mt-3 flex shrink-0 justify-end gap-2 border-t border-white/[0.06] pt-3 pb-5">
-        <button className="h-8 rounded-[7px] border border-white/[0.10] bg-white/[0.03] px-4 text-[11px] font-semibold text-[#64748B] hover:text-white">
+      <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--semlox-interactive-border)] pt-3 pb-5">
+        <Button variant="secondary" size="standard">
           Cancel
-        </button>
-        <button className="h-8 rounded-[7px] bg-[#2F80FF] px-4 text-[11px] font-bold text-white shadow-[0_8px_24px_rgba(47,128,255,0.25)] hover:bg-[#3B8BFF]">
+        </Button>
+        <Button variant="solid" size="standard">
           Save Changes
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -435,57 +444,25 @@ function IconButton({ children }: { children: React.ReactNode }) {
 }
 
 function useCompanyMembers(companyId: string | null) {
-  const [members, setMembers] = useState<any[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const authBlockedCompanyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    authBlockedCompanyRef.current = null;
-  }, [companyId]);
-
+  const membersQuery = useCompanyMembersQuery(companyId);
   const refreshMembers = useCallback(async (force = false) => {
     if (!companyId) {
-      setMembers([]);
-      setError(null);
       return false;
     }
-    if (!force && authBlockedCompanyRef.current === companyId) return false;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const resp = await fetch(`/api/company/members?companyId=${companyId}`, { credentials: "include" });
-      const j = await resp.json().catch(() => ({}));
-      if (resp.status === 401) {
-        authBlockedCompanyRef.current = companyId;
-        setError("Your session expired. Please sign in again.");
-        setMembers((current) => current ?? []);
-        return false;
-      }
-      if (!resp.ok || j?.ok === false) {
-        setError(j?.message || "Unable to load team members. Try again.");
-        setMembers((current) => current ?? []);
-        return false;
-      } else {
-        authBlockedCompanyRef.current = null;
-        setMembers(Array.isArray(j?.data) ? j.data : []);
-        return true;
-      }
-    } catch {
-      setError("Unable to load team members. Try again.");
-      setMembers((current) => current ?? []);
+    if (!force && membersQuery.error?.status === 401) return false;
+    const result = await membersQuery.refetch();
+    if (result.error) {
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, [companyId]);
+    return true;
+  }, [companyId, membersQuery]);
 
-  useEffect(() => {
-    refreshMembers();
-  }, [refreshMembers]);
-
-  return { members, loading, error, refreshMembers };
+  return {
+    members: membersQuery.data ?? null,
+    loading: membersQuery.isPending || membersQuery.isFetching,
+    error: membersQuery.error?.message ?? null,
+    refreshMembers,
+  };
 }
 
 const memberRoles = ["owner", "admin", "manager", "operator", "viewer"];
@@ -533,7 +510,7 @@ function TeamMembers() {
     setMemberActionLoading((prev) => ({ ...prev, [userId]: action }));
   };
 
-  const updateMemberRole = async (member: any, nextRole: string) => {
+  const updateMemberRole = async (member: CompanyMember, nextRole: string) => {
     if (!selectedCompanyId || nextRole === normalizeMemberRole(member.role)) return;
     const roleLabel = nextRole.charAt(0).toUpperCase() + nextRole.slice(1);
     if (!window.confirm(`Change ${member.email || "this member"} to ${roleLabel}?`)) return;
@@ -560,7 +537,7 @@ function TeamMembers() {
     }
   };
 
-  const resendInvite = async (member: any) => {
+  const resendInvite = async (member: CompanyMember) => {
     if (!selectedCompanyId || member.status !== "invited") return;
     setMemberBusy(member.user_id, "resend");
     try {
@@ -584,7 +561,7 @@ function TeamMembers() {
     }
   };
 
-  const removeMember = async (member: any) => {
+  const removeMember = async (member: CompanyMember) => {
     if (!selectedCompanyId) return;
     if (!window.confirm("Remove this member from the company? This will remove their access to this company but will not delete their account.")) return;
 
@@ -1948,17 +1925,18 @@ function SettingsPageContent() {
   const [currentMembership, setCurrentMembership] = useState<AuthMembership | null>(null);
 
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
+  const membershipsQuery = useMemberships();
 
   useEffect(() => {
-    let mounted = true;
-    async function checkSession() {
-      if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] checking memberships");
-      const res = await fetchMemberships();
-      if (!mounted) return;
+    if (membershipsQuery.isPending) return;
+    let cancelled = false;
 
-      if (!res.ok) {
-        if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", res.status);
-        if (res.status === 401 || res.status === 403) {
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (membershipsQuery.isError) {
+        const status = membershipErrorStatus(membershipsQuery.error);
+        if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", status);
+        if (status === 401 || status === 403) {
           if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] redirect reason: unauthorized");
           router.replace("/login");
           return;
@@ -1967,7 +1945,7 @@ function SettingsPageContent() {
         return;
       }
 
-      const memberships: AuthMembership[] = res.memberships || [];
+      const memberships: AuthMembership[] = membershipsQuery.data || [];
       if (process.env.NODE_ENV !== "production") console.log("[dashboard-auth] memberships status", 200, memberships.length);
 
       let effectiveCompanyId = selectedCompanyId;
@@ -1983,15 +1961,19 @@ function SettingsPageContent() {
         (memberships.length === 1 ? memberships[0] : null);
       setCurrentMembership(membership);
       setAllowed(true);
-    }
-
-    checkSession();
-    window.addEventListener("pageshow", checkSession);
+    });
     return () => {
-      mounted = false;
-      window.removeEventListener("pageshow", checkSession);
+      cancelled = true;
     };
-  }, [router, selectedCompanyId, setSelectedCompanyId]);
+  }, [
+    membershipsQuery.data,
+    membershipsQuery.error,
+    membershipsQuery.isError,
+    membershipsQuery.isPending,
+    router,
+    selectedCompanyId,
+    setSelectedCompanyId,
+  ]);
 
   if (!allowed) {
     return (

@@ -10,6 +10,8 @@ import type {
   DocumentRow,
   FieldRow,
 } from "./awb/persistence";
+import type { AwbExtractedField } from "./awb/types";
+import { summarizeAwbFields } from "./awb/persistence";
 
 type DashboardRange = "7d" | "30d" | "90d";
 type DashboardScope = "user" | "company";
@@ -24,6 +26,36 @@ type EventRow = {
   metadata: Record<string, unknown> | null;
   created_at: string;
 };
+
+const ACTIONABLE_DOCUMENT_STATUSES = new Set<DocumentRow["status"]>([
+  "uploaded",
+  "extracting",
+  "review_required",
+  "ready_to_issue",
+  "draft",
+  "failed",
+]);
+
+function isActionableDocument(document: DocumentRow) {
+  return ACTIONABLE_DOCUMENT_STATUSES.has(document.status);
+}
+
+function fieldFromRow(field: FieldRow): AwbExtractedField {
+  const confidence = Math.min(1, Math.max(0, Number(field.confidence) || 0));
+  return {
+    key: field.key,
+    label: field.label,
+    value: field.value || "",
+    confidence,
+    confidencePercent: Math.round(confidence * 100),
+    needsReview: Boolean(field.needs_review),
+    comment: field.comment || undefined,
+    status: field.status,
+    color: field.color,
+    page: field.page || undefined,
+    source: field.source || undefined,
+  };
+}
 
 function headers() {
   if (!supabaseServiceRoleKey) throw new Error("Dashboard service unavailable");
@@ -123,15 +155,14 @@ export async function getDashboardData(
       ?.value || fallback;
   const fieldSummary = (documentId: string) => {
     const values = fieldsByDocument.get(documentId) || [];
+    const summary = summarizeAwbFields(values.map(fieldFromRow));
     const corrected = values.filter(
       (field) => String(field.value || "") !== String(field.original_value || "")
     ).length;
     return {
-      total: values.length,
-      captured: values.filter((field) => String(field.value || "").trim()).length,
-      warnings: values.filter((field) =>
-        ["warning", "review", "missing"].includes(field.status)
-      ).length,
+      total: summary.totalFields,
+      captured: summary.capturedFields,
+      warnings: summary.needsReview,
       corrected,
     };
   };
@@ -191,16 +222,12 @@ export async function getDashboardData(
   ].filter((item) => item.value > 0);
 
   const activeDocuments = documents
-    .filter((document) =>
-      ["review_required", "draft", "ready_to_issue", "failed"].includes(
-        document.status
-      )
-    )
+    .filter(isActionableDocument)
     .sort(
       (left, right) =>
-        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+        new Date(right.updated_at || right.created_at).getTime() -
+        new Date(left.updated_at || left.created_at).getTime()
     )
-    .slice(0, 12)
     .map((document) => ({
       documentId: document.id,
       awbNumber: awbNumber(document.id, document.file_name),
@@ -208,7 +235,7 @@ export async function getDashboardData(
       processedBy: userName(document.uploaded_by),
       status: document.status,
       fields: fieldSummary(document.id),
-      updatedAt: document.updated_at,
+      updatedAt: document.updated_at || document.created_at,
     }));
 
   const recentActivity = events.slice(0, 12).map((event) => ({

@@ -85,7 +85,11 @@ export async function POST(
       { ...access.document, status: "issued" },
       fieldRows
     );
-    await setAwbDocumentIssued(documentId, issuedExtraction.summary);
+    await setAwbDocumentIssued(
+      documentId,
+      issuedExtraction.summary,
+      access.document.storage_path
+    );
     const awbNumber =
       issuedExtraction.fields.find((field) => field.key === "awb_number")?.value ||
       null;

@@ -19,7 +19,7 @@ async function requireTeamManager(request: Request, companyId: string) {
     return { error: jsonResponse({ ok: false, code: "AUTH_SERVICE_ERROR", message: "Service unavailable" }, 500) };
   }
 
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return { error: jsonResponse({ ok: false, code: "UNAUTHORIZED", message: "Not authenticated" }, 401) };
 
   const user = await getUserFromAccessToken(token);
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({ ok: false, code: "AUTH_SERVICE_ERROR", message: "Service unavailable" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 
-  const token = extractBearerTokenFromRequest(request);
+  const token = await extractBearerTokenFromRequest(request);
   if (!token) return new Response(JSON.stringify({ ok: false, code: "UNAUTHORIZED", message: "Not authenticated" }), { status: 401, headers: { "Content-Type": "application/json" } });
 
   const user = await getUserFromAccessToken(token);
