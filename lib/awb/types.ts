@@ -54,6 +54,27 @@ export type AwbExtractionResponse = {
     stages?: Record<string, string>;
     errors?: string[];
     totalSeconds?: number;
+    timingMetrics?: {
+      processing: {
+        extractorMs: number | null;
+        llmMs: number | null;
+        businessLogicMs: number | null;
+        totalMs: number | null;
+      };
+      review: {
+        activeMs: number | null;
+        method: string | null;
+      };
+      quality: {
+        correctedFieldsCount: number | null;
+      };
+      lifecycle: {
+        uploadStartedAt: string | null;
+        reviewReadyAt: string | null;
+        issuedAt: string | null;
+        uploadToIssueMs: number | null;
+      };
+    };
   };
   warnings: string[];
   raw?: unknown;

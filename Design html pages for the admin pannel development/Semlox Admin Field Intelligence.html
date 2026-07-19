@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Field Intelligence</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+<style>
+.heat-grid{display:grid;grid-template-columns:150px repeat(6,1fr);gap:4px;padding:16px 18px}
+.heat-hd{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:center;padding:4px}
+.heat-rowlbl{font-size:11px;color:var(--text2);display:flex;align-items:center;padding:0 8px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+const FIELDS=[
+  {n:'AWB Number',app:486,cov:'99.4%',conf:95,review:12.1,corr:18.4,missing:0.6,val:3.1,issue:'OCR character swap',trend:'down'},
+  {n:'Shipper Name & Address',app:486,cov:'97.9%',conf:82,review:19.8,corr:14.2,missing:2.1,val:5.4,issue:'Address line merge',trend:'flat'},
+  {n:'Consignee Name & Address',app:486,cov:'96.5%',conf:74,review:38.6,corr:31.0,missing:3.5,val:9.8,issue:'Multi-line truncation',trend:'up'},
+  {n:'Origin Airport',app:486,cov:'99.8%',conf:97,review:4.3,corr:3.2,missing:0.2,val:0.8,issue:'Rare — code mismatch',trend:'flat'},
+  {n:'Destination Airport',app:486,cov:'99.6%',conf:96,review:5.1,corr:4.0,missing:0.4,val:1.0,issue:'Rare — code mismatch',trend:'down'},
+  {n:'Flight Date',app:486,cov:'98.1%',conf:91,review:17.4,corr:12.3,missing:1.9,val:4.2,issue:'Extra OCR characters',trend:'down'},
+  {n:'Pieces',app:486,cov:'99.9%',conf:98,review:2.1,corr:1.6,missing:0.1,val:0.3,issue:'Rare',trend:'flat'},
+  {n:'Gross Weight',app:486,cov:'98.6%',conf:88,review:21.2,corr:15.1,missing:1.4,val:6.7,issue:'Decimal/unit confusion',trend:'up'},
+  {n:'Chargeable Weight',app:486,cov:'97.2%',conf:80,review:23.5,corr:16.8,missing:2.8,val:7.1,issue:'Formula mismatch',trend:'flat'},
+  {n:'Weight Unit',app:486,cov:'99.7%',conf:96,review:3.4,corr:2.5,missing:0.3,val:0.5,issue:'Rare — kg/lb swap',trend:'flat'},
+  {n:'Handling Information',app:486,cov:'91.3%',conf:71,review:33.1,corr:26.0,missing:8.7,val:11.2,issue:'Free-text ambiguity',trend:'up'},
+  {n:'Nature & Quantity of Goods',app:486,cov:'94.8%',conf:76,review:20.6,corr:11.4,missing:5.2,val:6.9,issue:'Truncated descriptions',trend:'flat'},
+  {n:'Dimensions / Volume',app:486,cov:'89.1%',conf:69,review:24.8,corr:10.2,missing:10.9,val:8.4,issue:'Missing on scanned copies',trend:'down'},
+  {n:'Rate Class',app:486,cov:'96.0%',conf:85,review:9.7,corr:6.3,missing:4.0,val:2.1,issue:'Code ambiguity',trend:'flat'},
+  {n:'Accounting Information',app:486,cov:'93.4%',conf:79,review:15.9,corr:9.1,missing:6.6,val:3.8,issue:'Free-text variance',trend:'flat'},
+];
+
+const HEAT_COLS=['Low Confidence','Missing','Formatting','Validation','Human Correction','OCR Problem'];
+function heatVal(f,col){
+  switch(col){
+    case'Low Confidence':return 100-f.conf;
+    case'Missing':return f.missing*4;
+    case'Formatting':return f.corr*0.6;
+    case'Validation':return f.val*3;
+    case'Human Correction':return f.corr;
+    case'OCR Problem':return f.issue.toLowerCase().includes('ocr')?f.corr*1.2:f.corr*0.3;
+    default:return 0;
+  }
+}
+function heatColor(v){
+  const t=Math.min(v/40,1);
+  const r=Math.round(30+t*209), g=Math.round(41+ (1-t)*170), b=Math.round(59+(1-t)*20);
+  return `rgb(${Math.round(59+t*(239-59))},${Math.round(130-t*90)},${Math.round(246-t*180)})`;
+}
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+  const [sortKey,setSortKey]=useState('corr');
+  const [drawerField,setDrawerField]=useState(null);
+  const sorted=[...FIELDS].sort((a,b)=>b[sortKey]-a[sortKey]);
+  const mostCorrected=[...FIELDS].sort((a,b)=>b.corr-a.corr).slice(0,6);
+  const lowestConf=[...FIELDS].sort((a,b)=>a.conf-b.conf).slice(0,6);
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="field"/>
+      <div className="main">
+        <AdminTopbar title="Field Intelligence" sub="Identify which AWB fields drive uncertainty, corrections & review workload" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Fields by Correction Rate</div><div className="card-s">Highest human correction rate first</div></div></div>
+              {mostCorrected.map((f,i)=>(<div key={i} className="fe-row"><span className="fe-name">{f.n}</span><div className="fe-bar"><div className="fe-fill" style={{width:`${f.corr*2.6}%`,background:f.corr>25?'#ef4444':f.corr>12?'#f59e0b':'#3b82f6'}}/></div><span className="fe-pct" style={{color:f.corr>25?'#ef4444':f.corr>12?'#f59e0b':'#3b82f6'}}>{f.corr}%</span></div>))}
+            </div>
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Lowest-Confidence Fields</div><div className="card-s">Consistently uncertain extractions</div></div></div>
+              {lowestConf.map((f,i)=>(<div key={i} className="fe-row"><span className="fe-name">{f.n}</span><div className="fe-bar"><div className="fe-fill" style={{width:`${f.conf}%`,background:f.conf<75?'#ef4444':f.conf<88?'#f59e0b':'#10b981'}}/></div><span className="fe-pct" style={{color:f.conf<75?'#ef4444':f.conf<88?'#f59e0b':'#10b981'}}>{f.conf}%</span></div>))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Field Problem Heatmap</div><div className="card-s">Issue intensity by category — darker/redder means more frequent</div></div></div>
+            <div className="heat-grid" style={{gridTemplateColumns:'150px repeat(6,1fr)'}}>
+              <div></div>
+              {HEAT_COLS.map(c=><div key={c} className="heat-hd">{c}</div>)}
+              {FIELDS.slice(0,10).map((f,i)=>(
+                <React.Fragment key={i}>
+                  <div className="heat-rowlbl">{f.n}</div>
+                  {HEAT_COLS.map(col=>{const v=heatVal(f,col);return <div key={col} className="heat-cell" style={{background:heatColor(v)}} title={`${col}: ${v.toFixed(1)}`}>{v.toFixed(0)}</div>;})}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd">
+              <div><div className="card-t">Field Performance Table</div><div className="card-s">All AWB fields · click a row for detail</div></div>
+              <select className="filter-sel" style={{marginLeft:'auto'}} value={sortKey} onChange={e=>setSortKey(e.target.value)}>
+                <option value="corr">Sort: Correction Rate</option>
+                <option value="conf">Sort: Confidence</option>
+                <option value="review">Sort: Review Rate</option>
+                <option value="missing">Sort: Missing Rate</option>
+                <option value="val">Sort: Validation Failure</option>
+              </select>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Field</th><th>Appearances</th><th>Coverage</th><th>Avg Confidence</th><th>Review Rate</th><th>Correction Rate</th><th>Missing Rate</th><th>Validation Fail</th><th>Most Common Issue</th><th>Trend</th><th></th></tr></thead>
+                <tbody>
+                  {sorted.map((f,i)=>(
+                    <tr key={i} onClick={()=>setDrawerField(f)}>
+                      <td><span className="co-name">{f.n}</span></td>
+                      <td><span className="num-cell">{f.app}</span></td>
+                      <td><span className="num-cell">{f.cov}</span></td>
+                      <td><ConfidenceBadge v={f.conf}/></td>
+                      <td><span className="num-cell" style={{color:'var(--amber)'}}>{f.review}%</span></td>
+                      <td><span className="num-cell" style={{color:f.corr>25?'var(--red)':f.corr>12?'var(--amber)':'var(--blue)'}}>{f.corr}%</span></td>
+                      <td><span className="num-cell" style={{color:'var(--muted)'}}>{f.missing}%</span></td>
+                      <td><span className="num-cell" style={{color:'var(--red)'}}>{f.val}%</span></td>
+                      <td style={{fontSize:11,color:'var(--muted)'}}>{f.issue}</td>
+                      <td>{f.trend==='up'?<span style={{color:'var(--red)'}}>▲</span>:f.trend==='down'?<span style={{color:'var(--green)'}}>▼</span>:<span style={{color:'var(--muted)'}}>—</span>}</td>
+                      <td style={{color:'var(--muted)'}}><AdminIc p={AdminI.chevronRight} size={13}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {drawerField && (
+        <div className="drawer-overlay" onClick={()=>setDrawerField(null)}>
+          <div className="drawer" onClick={e=>e.stopPropagation()}>
+            <div className="drawer-hd"><div><div style={{fontSize:15,fontWeight:700}}>{drawerField.n}</div><div style={{fontSize:11,color:'var(--muted)'}}>Field drill-down</div></div><button className="drawer-close" onClick={()=>setDrawerField(null)}><AdminIc p={AdminI.x} size={16}/></button></div>
+            <div className="drawer-body">
+              <div className="grid-2" style={{gap:10}}>
+                <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:20,fontWeight:700,fontFamily:'Space Mono'}}>{drawerField.conf}%</div><div style={{fontSize:10,color:'var(--muted)'}}>Avg confidence</div></div>
+                <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:20,fontWeight:700,fontFamily:'Space Mono',color:'var(--amber)'}}>{drawerField.corr}%</div><div style={{fontSize:10,color:'var(--muted)'}}>Correction rate</div></div>
+                <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:20,fontWeight:700,fontFamily:'Space Mono',color:'var(--red)'}}>{drawerField.val}%</div><div style={{fontSize:10,color:'var(--muted)'}}>Validation failure</div></div>
+                <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:20,fontWeight:700,fontFamily:'Space Mono',color:'var(--muted)'}}>{drawerField.missing}%</div><div style={{fontSize:10,color:'var(--muted)'}}>Missing rate</div></div>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.04em'}}>Most Common Issue</div>
+                <div style={{fontSize:13,color:'var(--text2)',padding:'10px 12px',background:'var(--input-bg)',borderRadius:8,border:'1px solid var(--input-b)'}}>{drawerField.issue}</div>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.04em'}}>Example Correction</div>
+                <div style={{fontSize:12,padding:'10px 12px',background:'var(--input-bg)',borderRadius:8,border:'1px solid var(--input-b)',lineHeight:1.8}}>
+                  <span className="diff-del">08.08.2025ggg</span>{' → '}<span className="diff-ins">08.08.2025</span>
+                </div>
+              </div>
+              <button className="btn btn-primary" style={{justifyContent:'center'}} onClick={()=>location.href='Semlox Admin Human Corrections.html'}>View all corrections for this field</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

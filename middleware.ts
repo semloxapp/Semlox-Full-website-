@@ -11,6 +11,19 @@ function isProtectedPage(pathname: string) {
   return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 }
 
+function isProtectedAdminPage(pathname: string) {
+  if (pathname === "/admin/login" || pathname === "/admin/unauthorized") return false;
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+function redirectWithRefreshedCookies(url: URL, sessionResponse: NextResponse) {
+  const redirectResponse = NextResponse.redirect(url);
+  sessionResponse.cookies.getAll().forEach((cookie) => {
+    redirectResponse.cookies.set(cookie);
+  });
+  return redirectResponse;
+}
+
 export async function middleware(request: NextRequest) {
   // Refreshes the Supabase session (access + refresh token) for *every*
   // matched request — including /api/* calls, not just page navigations.
@@ -22,7 +35,12 @@ export async function middleware(request: NextRequest) {
 
   if (isProtectedPage(request.nextUrl.pathname) && !user) {
     const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithRefreshedCookies(loginUrl, supabaseResponse);
+  }
+
+  if (isProtectedAdminPage(request.nextUrl.pathname) && !user) {
+    const loginUrl = new URL("/admin/login", request.url);
+    return redirectWithRefreshedCookies(loginUrl, supabaseResponse);
   }
 
   // API routes still perform their own 401 handling if unauthenticated;
@@ -33,6 +51,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/admin/:path*",
     "/api/:path*",
   ],
 };

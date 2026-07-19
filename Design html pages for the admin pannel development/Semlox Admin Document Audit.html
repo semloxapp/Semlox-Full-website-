@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Document Audit</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+const DOCS=[
+  {id:'AWB-2026-00481',file:'awb_00481_scan.pdf',company:'DB Schenker',model:'v1.2',fx:16,fr:9,fc:7,conf:62,time:'44.2s',status:'Review Required'},
+  {id:'AWB-2026-00397',file:'awb_00397.pdf',company:'Kuehne + Nagel',model:'v1.2',fx:16,fr:12,fc:9,conf:58,time:'51.8s',status:'Review Required'},
+  {id:'AWB-2026-00512',file:'awb_00512_fax.pdf',company:'Maersk Supply Chain',model:'v1.2',fx:15,fr:8,fc:6,conf:71,time:'39.1s',status:'Draft'},
+  {id:'AWB-2026-00340',file:'awb_00340.pdf',company:'DHL Express Global',model:'v1.2',fx:0,fr:0,fc:0,conf:0,time:'—',status:'Failed'},
+  {id:'AWB-2026-00455',file:'awb_00455_scan.pdf',company:'DB Schenker',model:'v1.2',fx:16,fr:10,fc:8,conf:65,time:'46.0s',status:'Review Required'},
+  {id:'AWB-2026-00299',file:'awb_00299.pdf',company:'Kuehne + Nagel',model:'v1.1',fx:16,fr:2,fc:1,conf:91,time:'27.4s',status:'Issued'},
+  {id:'AWB-2026-00201',file:'awb_00201.pdf',company:'DHL Express Global',model:'v1.1',fx:16,fr:1,fc:1,conf:94,time:'24.9s',status:'Issued'},
+  {id:'AWB-2026-00150',file:'awb_00150.pdf',company:'Maersk Supply Chain',model:'v1.1',fx:16,fr:0,fc:0,conf:97,time:'22.1s',status:'Issued'},
+];
+
+const TIMELINE=[
+  ['09:41:02','Uploaded','#3b82f6'],['09:41:04','OCR started','#3b82f6'],['09:41:18','OCR completed','#3b82f6'],
+  ['09:41:20','Field extraction completed','#8b5cf6'],['09:41:22','Validation completed','#8b5cf6'],
+  ['09:44:51','Human review started','#f59e0b'],['09:47:06','Corrections saved','#f59e0b'],['09:49:10','AWB issued','#10b981'],
+];
+
+const FIELD_ROWS=[
+  {n:'AWB Number',ai:'020-4471123O',cur:'020-44711230',conf:79,status:'Corrected'},
+  {n:'Origin Airport',ai:'FRA',cur:'FRA',conf:98,status:'Validated'},
+  {n:'Destination Airport',ai:'JFK',cur:'JFK',conf:97,status:'Validated'},
+  {n:'Flight Date',ai:'08.08.2025ggg',cur:'08.08.2025',conf:62,status:'Corrected'},
+  {n:'Gross Weight',ai:'1240.',cur:'1240.0',conf:71,status:'Corrected'},
+  {n:'Handling Information',ai:'FRAGILE HANDLE W CARE',cur:'FRAGILE — HANDLE WITH CARE',conf:68,status:'Corrected'},
+];
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+  const [selected,setSelected]=useState(DOCS[0]);
+  const [tab,setTab]=useState('overview');
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="audit"/>
+      <div className="main">
+        <AdminTopbar title="Document Audit Explorer" sub="Inspect every tested document — extraction, corrections, timeline" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="filter-bar">
+            <select className="filter-sel"><option>All companies</option></select>
+            <select className="filter-sel"><option>All statuses</option></select>
+            <select className="filter-sel"><option>Model: all versions</option></select>
+            <div className="filter-chip">Test Run 004<button><AdminIc p={AdminI.x} size={10}/></button></div>
+            <button className="btn" style={{marginLeft:'auto'}}><AdminIc p={AdminI.download} size={13}/>Export</button>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Tested Documents</div><div className="card-s">Click a row to open detail below</div></div></div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Document</th><th>File</th><th>Company</th><th>Model</th><th>Fields Extracted</th><th>Fields Corrected</th><th>Confidence</th><th>Time</th><th>Status</th></tr></thead>
+                <tbody>
+                  {DOCS.map((d,i)=>(
+                    <tr key={i} onClick={()=>setSelected(d)} style={selected.id===d.id?{background:'var(--card-hover)'}:{}}>
+                      <td><span className="co-name">{d.id}</span></td>
+                      <td style={{fontFamily:'Space Mono',fontSize:10,color:'var(--muted)'}}>{d.file}</td>
+                      <td>{d.company}</td>
+                      <td><span className="badge badge-gray">{d.model}</span></td>
+                      <td><span className="num-cell">{d.fx}</span></td>
+                      <td><span className="num-cell" style={{color:d.fc>5?'var(--red)':d.fc>0?'var(--amber)':'var(--green)'}}>{d.fc}</span></td>
+                      <td>{d.conf>0?<ConfidenceBadge v={d.conf}/>:<span style={{color:'var(--muted)'}}>—</span>}</td>
+                      <td style={{fontFamily:'Space Mono',fontSize:11}}>{d.time}</td>
+                      <td><StatusBadge status={d.status}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pager"><span>Showing 8 of 486 documents</span><div className="pager-btns"><button className="pager-btn" disabled><AdminIc p="M10 3L5 8l5 5" size={12}/></button><button className="pager-btn"><AdminIc p="M6 3l5 5-5 5" size={12}/></button></div></div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">{selected.id}</div><div className="card-s">{selected.file} · {selected.company}</div></div><StatusBadge status={selected.status}/></div>
+            <div className="tabs">
+              {['overview','fields','corrections','timeline'].map(t=>(<button key={t} className={`tab ${tab===t?'active':''}`} onClick={()=>setTab(t)}>{t==='overview'?'Overview':t==='fields'?'Extracted Fields':t==='corrections'?'Corrections':'Processing Timeline'}</button>))}
+            </div>
+            {tab==='overview' && (
+              <div className="grid-4" style={{padding:'16px 18px'}}>
+                {[['Model Version',selected.model,'#3b82f6'],['Fields Extracted',selected.fx,'#8b5cf6'],['Fields Corrected',selected.fc,'#f59e0b'],['Processing Time',selected.time,'#06b6d4']].map(([l,v,c])=>(
+                  <div key={l} style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:17,fontWeight:700,fontFamily:'Space Mono',color:c}}>{v}</div><div style={{fontSize:10,color:'var(--muted)',marginTop:4}}>{l}</div></div>
+                ))}
+              </div>
+            )}
+            {tab==='fields' && (
+              <div className="tbl-wrap"><table className="tbl">
+                <thead><tr><th>Field</th><th>AI Original</th><th>Current Value</th><th>Confidence</th><th>Status</th></tr></thead>
+                <tbody>{FIELD_ROWS.map((f,i)=>(<tr key={i}><td>{f.n}</td><td style={{fontFamily:'Space Mono',fontSize:11}}>{f.ai}</td><td style={{fontFamily:'Space Mono',fontSize:11}}>{f.cur}</td><td><ConfidenceBadge v={f.conf}/></td><td><span className={`badge ${f.status==='Corrected'?'badge-amber':'badge-green'}`}>{f.status}</span></td></tr>))}</tbody>
+              </table></div>
+            )}
+            {tab==='corrections' && (
+              <div className="tbl-wrap"><table className="tbl">
+                <thead><tr><th>Field</th><th>Before → After</th><th>Corrected By</th><th>Timestamp</th></tr></thead>
+                <tbody>{FIELD_ROWS.filter(f=>f.status==='Corrected').map((f,i)=>(<tr key={i}><td>{f.n}</td><td style={{fontFamily:'Space Mono',fontSize:11}}><span className="diff-del">{f.ai}</span> <span className="diff-ins">{f.cur}</span></td><td>Operator: J. Marlow</td><td style={{fontFamily:'Space Mono',fontSize:10,color:'var(--muted)'}}>2026-07-14 09:47</td></tr>))}</tbody>
+              </table></div>
+            )}
+            {tab==='timeline' && (
+              <div className="tl">
+                {TIMELINE.map(([t,l,c],i)=>(<div key={i} className="tl-item"><span className="tl-dot" style={{background:c}}/><span className="tl-time">{t}</span><span className="tl-label">{l}</span></div>))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Human Corrections</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+<style>
+.cat-bar{display:flex;align-items:center;gap:10px;padding:8px 18px}
+.cat-lbl{font-size:11px;color:var(--text2);width:180px;flex-shrink:0}
+.diff-cell{font-family:'Space Mono',monospace;font-size:11px;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+const CORRECTIONS=[
+  {doc:'AWB-2026-00481',field:'Flight Date',before:'08.08.2025ggg',after:'08.08.2025',conf:62,cat:'OCR character correction',by:'Operator: J. Marlow',ts:'2026-07-14 09:47',model:'v1.2'},
+  {doc:'AWB-2026-00397',field:'Consignee Name & Address',before:'ACME Freight Solu\ntions GmbH, Berl',after:'ACME Freight Solutions GmbH, Berlin',conf:58,cat:'Address normalization',by:'Operator: R. Diaz',ts:'2026-07-14 10:02',model:'v1.2'},
+  {doc:'AWB-2026-00512',field:'Gross Weight',before:'1240.',after:'1240.0',conf:71,cat:'Number formatting',by:'Operator: J. Marlow',ts:'2026-07-14 10:14',model:'v1.2'},
+  {doc:'AWB-2026-00455',field:'Handling Information',before:'FRAGILE HANDLE W CARE',after:'FRAGILE — HANDLE WITH CARE',cat:'OCR character correction',conf:68,by:'Operator: S. Novak',ts:'2026-07-13 15:22',model:'v1.2'},
+  {doc:'AWB-2026-00340',field:'Origin Airport',before:'—',after:'FRA',cat:'Missing value addition',conf:0,by:'Operator: R. Diaz',ts:'2026-07-13 16:40',model:'v1.2'},
+  {doc:'AWB-2026-00299',field:'Weight Unit',before:'lb',after:'kg',cat:'Unit correction',conf:83,by:'Operator: S. Novak',ts:'2026-07-13 17:05',model:'v1.1'},
+  {doc:'AWB-2026-00201',field:'AWB Number',before:'020-4471123O',after:'020-44711230',cat:'OCR character correction',conf:79,by:'Operator: J. Marlow',ts:'2026-07-12 11:30',model:'v1.1'},
+];
+
+const CATS=[
+  {n:'OCR character correction',v:31,c:'#3b82f6'},
+  {n:'Address normalization',v:19,c:'#8b5cf6'},
+  {n:'Number formatting',v:14,c:'#06b6d4'},
+  {n:'Missing value addition',v:12,c:'#f59e0b'},
+  {n:'Unit correction',v:9,c:'#00d4aa'},
+  {n:'Wrong field mapping',v:8,c:'#f97316'},
+  {n:'Date formatting',v:7,c:'#ef4444'},
+];
+
+function diffLine(before,after){
+  return <span className="diff-cell"><span className="diff-del">{before}</span>{' '}<span className="diff-ins">{after}</span></span>;
+}
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+  const [modal,setModal]=useState(null);
+  const [groupBy,setGroupBy]=useState('field');
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="corrections"/>
+      <div className="main">
+        <AdminTopbar title="Human Correction Intelligence" sub="What users changed, why, and where the model needs improvement" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="kpi-row">
+            <div className="kpi b"><div className="kpi-top"><div className="kpi-lbl">Total Corrections</div><div className="kpi-ic b"><AdminIc p={AdminI.edit} size={14}/></div></div><div className="kpi-val">762</div><div className="kpi-foot">across 486 documents</div></div>
+            <div className="kpi a"><div className="kpi-top"><div className="kpi-lbl">Corrected Documents</div><div className="kpi-ic a"><AdminIc p={AdminI.doc} size={14}/></div></div><div className="kpi-val">314</div><div className="kpi-foot">64.6% of processed</div></div>
+            <div className="kpi p"><div className="kpi-top"><div className="kpi-lbl">Avg per Document</div><div className="kpi-ic p"><AdminIc p={AdminI.layers} size={14}/></div></div><div className="kpi-val">2.3</div><div className="kpi-foot">fields corrected</div></div>
+            <div className="kpi c"><div className="kpi-top"><div className="kpi-lbl">Most Corrected Field</div><div className="kpi-ic c"><AdminIc p={AdminI.target} size={14}/></div></div><div className="kpi-val" style={{fontSize:17}}>Consignee Addr.</div><div className="kpi-foot">31% correction rate</div></div>
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Correction Categories</div><div className="card-s">Share of total corrections by change type</div></div></div>
+              {CATS.map((c,i)=>(<div key={i} className="cat-bar"><span className="cat-lbl">{c.n}</span><div className="fe-bar"><div className="fe-fill" style={{width:`${c.v*3}%`,background:c.c}}/></div><span className="fe-pct" style={{color:c.c}}>{c.v}%</span></div>))}
+            </div>
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Corrections Over Time</div><div className="card-s">Daily correction volume, last 7 days</div></div></div>
+              <div style={{padding:'20px 18px 10px',display:'flex',alignItems:'flex-end',gap:8,height:150}}>
+                {[88,102,95,110,120,98,762/7|0].map((v,i)=>(
+                  <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+                    <div style={{width:'100%',height:`${(v/120)*100}px`,background:'linear-gradient(180deg,#8b5cf6,#3b82f6)',borderRadius:'4px 4px 0 0'}}/>
+                    <span style={{fontSize:9,color:'var(--muted)',fontFamily:'Space Mono'}}>D{i+1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd">
+              <div><div className="card-t">Before / After Explorer</div><div className="card-s">What the AI extracted vs. what the reviewer corrected</div></div>
+              <select className="filter-sel" style={{marginLeft:'auto'}} value={groupBy} onChange={e=>setGroupBy(e.target.value)}>
+                <option value="field">Group: Field</option>
+                <option value="company">Group: Company</option>
+                <option value="model">Group: Model Version</option>
+              </select>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Document</th><th>Field</th><th>AI Original → Human Corrected</th><th>Confidence</th><th>Change Type</th><th>Corrected By</th><th>Timestamp</th><th>Model</th><th></th></tr></thead>
+                <tbody>
+                  {CORRECTIONS.map((c,i)=>(
+                    <tr key={i} onClick={()=>setModal(c)}>
+                      <td><span className="co-name">{c.doc}</span></td>
+                      <td>{c.field}</td>
+                      <td>{diffLine(c.before,c.after)}</td>
+                      <td>{c.conf>0?<ConfidenceBadge v={c.conf}/>:<span style={{color:'var(--muted)'}}>—</span>}</td>
+                      <td><span className="badge badge-purple">{c.cat}</span></td>
+                      <td style={{fontSize:11}}>{c.by}</td>
+                      <td style={{fontFamily:'Space Mono',fontSize:10,color:'var(--muted)'}}>{c.ts}</td>
+                      <td><span className="badge badge-gray">{c.model}</span></td>
+                      <td style={{color:'var(--muted)'}}><AdminIc p={AdminI.chevronRight} size={13}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pager"><span>Showing 7 of 762 corrections</span><div className="pager-btns"><button className="pager-btn" disabled><AdminIc p="M10 3L5 8l5 5" size={12}/></button><button className="pager-btn"><AdminIc p="M6 3l5 5-5 5" size={12}/></button></div></div>
+          </div>
+        </div>
+      </div>
+
+      {modal && (
+        <div className="drawer-overlay" onClick={()=>setModal(null)} style={{alignItems:'center',justifyContent:'center'}}>
+          <div className="card" onClick={e=>e.stopPropagation()} style={{width:560,maxWidth:'92vw',maxHeight:'86vh',overflowY:'auto'}}>
+            <div className="card-hd"><div><div className="card-t">{modal.doc} · {modal.field}</div><div className="card-s">Correction detail</div></div><button className="drawer-close" onClick={()=>setModal(null)}><AdminIc p={AdminI.x} size={16}/></button></div>
+            <div style={{padding:18,display:'flex',flexDirection:'column',gap:14}}>
+              <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}>
+                <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'}}>AI Original</div>
+                <div className="diff-del" style={{display:'inline-block'}}>{modal.before}</div>
+              </div>
+              <div style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}>
+                <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'}}>Human Corrected</div>
+                <div className="diff-ins" style={{display:'inline-block'}}>{modal.after}</div>
+              </div>
+              <div className="grid-2" style={{gap:10}}>
+                <div><div style={{fontSize:10,color:'var(--muted)'}}>Confidence</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{modal.conf>0?`${modal.conf}%`:'—'}</div></div>
+                <div><div style={{fontSize:10,color:'var(--muted)'}}>Change Type</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{modal.cat}</div></div>
+                <div><div style={{fontSize:10,color:'var(--muted)'}}>Corrected By</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{modal.by}</div></div>
+                <div><div style={{fontSize:10,color:'var(--muted)'}}>Model Version</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{modal.model}</div></div>
+              </div>
+              <button className="btn btn-primary" style={{justifyContent:'center'}} onClick={()=>location.href='Semlox Admin Document Audit.html'}>Open source document</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+import { NextResponse } from "next/server";
+import { requirePlatformAdmin } from "@/lib/admin/server/auth";
+import { getAdminCurrentDifferenceDetail } from "@/lib/admin/server/current-differences-service";
+import { validateAdminFieldId } from "@/lib/admin/server/validation";
+const privateHeaders = { "Cache-Control": "private, no-store, max-age=0" };
+export async function GET(_request: Request, { params }: { params: Promise<{ fieldId: string }> }) { const guard = await requirePlatformAdmin(); if (!guard.ok) return NextResponse.json({ ok: false, code: guard.code, message: guard.status === 401 ? "Authentication is required." : "You are not authorized to access this resource." }, { status: guard.status, headers: privateHeaders }); const parsed = validateAdminFieldId((await params).fieldId); if (!parsed.ok) return NextResponse.json({ ok: false, code: parsed.code, message: parsed.message }, { status: 400, headers: privateHeaders }); try { const data = await getAdminCurrentDifferenceDetail(parsed.value); if (!data) return NextResponse.json({ ok: false, code: "CURRENT_DIFFERENCE_NOT_FOUND", message: "Current difference was not found." }, { status: 404, headers: privateHeaders }); return NextResponse.json({ ok: true, data }, { headers: privateHeaders }); } catch { return NextResponse.json({ ok: false, code: "CURRENT_DIFFERENCE_QUERY_FAILED", message: "Current-difference details could not be loaded." }, { status: 500, headers: privateHeaders }); } }
+export const runtime = "nodejs"; export const dynamic = "force-dynamic";

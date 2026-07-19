@@ -16,6 +16,9 @@ import { useCompany } from "../../context/CompanyContext";
 import { awbHistoryQueryKeys } from "../../hooks/queries/useAwbHistory";
 import { dashboardQueryKeys } from "../../hooks/queries/useDashboardData";
 import { membershipErrorStatus, useMemberships } from "../../hooks/queries/useMemberships";
+import { useActiveReviewTimer } from "../../hooks/useActiveReviewTimer";
+import { awbTimingClientFlags } from "@/lib/features/awbTimingFlags.client";
+import { AwbTimingDebugPanel } from "./components/AwbTimingDebugPanel";
 import {
   Activity,
   Bell,
@@ -32,6 +35,7 @@ import {
   Upload,
 } from "lucide-react";
 import type { AwbExtractedField, AwbExtractionResponse } from "@/lib/awb/types";
+import { REQUIRED_AWB_FIELD_KEYS } from "@/lib/awb/fieldRegistry";
 import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
@@ -53,20 +57,6 @@ const ALLOWED_AWB_MIME_TYPES = new Set([
   "image/tiff",
   "image/x-tiff",
 ]);
-const REQUIRED_AWB_FIELDS = [
-  "awb_number",
-  "shipper_name_address",
-  "consignee_name_address",
-  "origin_airport",
-  "destination_airport",
-  "issuing_carrier",
-  "pieces",
-  "gross_weight",
-  "chargeable_weight",
-  "weight_unit",
-  "nature_and_quantity_of_goods",
-] as const;
-
 function responseMessage(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object") return fallback;
   const message = (payload as Record<string, unknown>).message;
@@ -124,11 +114,11 @@ function awbPayloadFromExtraction(extraction: AwbExtractionResponse) {
 
 function validateReviewForIssue(fields: AwbExtractedField[]) {
   const byKey = new Map(fields.map((field) => [field.key, field]));
-  const invalidKeys = REQUIRED_AWB_FIELDS.filter((key) => {
+  const invalidKeys = REQUIRED_AWB_FIELD_KEYS.filter((key) => {
     const field = byKey.get(key);
     return Boolean(field && !field.value.trim());
   });
-  const unmappedKeys = REQUIRED_AWB_FIELDS.filter((key) => !byKey.has(key));
+  const unmappedKeys = REQUIRED_AWB_FIELD_KEYS.filter((key) => !byKey.has(key));
   return { invalidKeys, unmappedKeys };
 }
 
@@ -1285,10 +1275,17 @@ function ReviewView({
     ? `${extraction.meta.totalSeconds.toFixed(1)}s`
     : `${(extraction.document.processingTimeMs / 1000).toFixed(1)}s`;
   const isIssued = extraction.document.status === "issued";
+  const isReviewWorkspaceReady =
+    canEdit && !isIssued && extraction.fields.length > 0;
+  const activeReview = useActiveReviewTimer(
+    extraction.document.id,
+    isReviewWorkspaceReady
+  );
   const awbPreviewReviewStats = getAwbReviewPresentationStats(formData);
 
   const updateFieldValue = (key: string, value: string) => {
     if (!canEdit) return;
+    activeReview.markActivity();
     const fields = extraction.fields.map((field) => {
       if (field.key !== key) return field;
       const normalizedValue = value;
@@ -1321,6 +1318,7 @@ function ReviewView({
 
   const confirmFieldValue = (key: string) => {
     if (!canEdit) return;
+    activeReview.markActivity();
     let confirmed = false;
     const fields = extraction.fields.map((field) => {
       if (field.key !== key) return field;
@@ -1349,6 +1347,7 @@ function ReviewView({
   };
 
   const saveDraft = async (): Promise<boolean> => {
+    activeReview.markActivity();
     setSavingDraft(true);
     setActionNotice(null);
     try {
@@ -1358,6 +1357,7 @@ function ReviewView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fields: extraction.fields.map((field) => ({ key: field.key, value: field.value })),
+          reviewCheckpoint: activeReview.prepareCheckpoint("draft_saved"),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -1373,6 +1373,7 @@ function ReviewView({
         document: { ...extraction.document, status: "draft" },
       });
       setIsDirty(false);
+      activeReview.startNewSession();
       setActionNotice({ type: "success", message: payload?.message || "Draft saved." });
       void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: awbHistoryQueryKeys.all });
@@ -1415,6 +1416,7 @@ function ReviewView({
   };
 
   const issueAwb = async () => {
+    activeReview.markActivity();
     const validation = validateReviewForIssue(extraction.fields);
     if (validation.invalidKeys.length) {
       setActionNotice({
@@ -1428,6 +1430,7 @@ function ReviewView({
   };
 
   const confirmIssue = async () => {
+    const issueClickedAt = new Date().toISOString();
     setConfirmIssueOpen(false);
     setIssuing(true);
     setActionNotice(null);
@@ -1438,6 +1441,8 @@ function ReviewView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fields: extraction.fields.map((field) => ({ key: field.key, value: field.value })),
+          reviewCheckpoint: activeReview.prepareCheckpoint("issued"),
+          issueClickedAt,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -1454,11 +1459,9 @@ function ReviewView({
         focusFirstInvalidField(firstInvalidKey);
         return;
       }
+      activeReview.complete();
 
-      onExtractionChange({
-        ...extraction,
-        document: { ...extraction.document, status: "issued" },
-      });
+      onExtractionChange(payload.data as AwbExtractionResponse);
       setIsDirty(false);
       setActionNotice({ type: "success", message: "AWB issued successfully." });
       void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
@@ -1478,8 +1481,29 @@ function ReviewView({
     }
   };
 
+  const refreshTimingMetrics = async () => {
+    const response = await fetch(
+      `/api/awb/documents/${extraction.document.id}`,
+      { credentials: "include", cache: "no-store" }
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false || !payload?.data) {
+      throw new Error("Unable to refresh timing metrics.");
+    }
+    onExtractionChange(payload.data as AwbExtractionResponse);
+  };
+
   return (
-    <div className="awb-review-page h-full overflow-y-auto overflow-x-hidden bg-[#050813] text-white">
+    <div
+      onInputCapture={activeReview.markActivity}
+      onChangeCapture={activeReview.markActivity}
+      onKeyDownCapture={activeReview.markActivity}
+      onPointerDownCapture={activeReview.markActivity}
+      onClickCapture={activeReview.markActivity}
+      onFocusCapture={activeReview.markEditableFocus}
+      onScrollCapture={activeReview.markScrollActivity}
+      className="awb-review-page h-full overflow-y-auto overflow-x-hidden bg-[#050813] text-white"
+    >
       <section className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 px-5 py-4">
         {extraction.mode === "fallback" ? (
           <div className="rounded-[8px] border border-amber-400/25 bg-amber-400/[0.08] px-4 py-3 text-[10px] font-medium text-amber-200">
@@ -1738,6 +1762,14 @@ function ReviewView({
             <UploadedPdfPanel fileName={fileName} pdfUrl={pdfUrl} sourceStored={sourceStored} />
           </div>
         </div>
+
+        {awbTimingClientFlags.debugUiEnabled ? (
+          <AwbTimingDebugPanel
+            extraction={extraction}
+            getSnapshot={activeReview.getDebugSnapshot}
+            onRefresh={isIssued ? refreshTimingMetrics : undefined}
+          />
+        ) : null}
       </section>
       {confirmIssueOpen ? (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
@@ -2079,12 +2111,14 @@ function AwbProcessingPageContent() {
   };
 
   const runExtraction = async (file: File) => {
+    const uploadStartedAt = new Date().toISOString();
     setExtractionError("");
     setExtraction(null);
     setPhase("processing");
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("uploadStartedAt", uploadStartedAt);
       if (selectedCompanyId) formData.append("companyId", selectedCompanyId);
       const response = await fetch("/api/awb/extract", {
         method: "POST",

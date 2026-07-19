@@ -4,10 +4,14 @@ import { normalizeAwbExtractionResponse } from "@/lib/awb/normalizeAwbExtraction
 import {
   authenticateAwbRequest,
   awbJsonResponse,
-  createAwbEvent,
   createPersistedAwbFailure,
   createPersistedAwbExtraction,
 } from "@/lib/awb/persistence";
+import { awbTimingServerFlags } from "@/lib/features/awbTimingFlags.server";
+import {
+  parseProviderTiming,
+  timingMetricsFromSummary,
+} from "@/lib/awb/timingMetrics";
 import type {
   AwbExtractionMode,
   AwbExtractionResponse,
@@ -170,38 +174,56 @@ function normalizeExtraction(
   }
 }
 
+function normalizeUploadStartedAt(value: FormDataEntryValue | null, receivedAt: string) {
+  if (typeof value !== "string") return receivedAt;
+  const timestamp = Date.parse(value);
+  const receivedTimestamp = Date.parse(receivedAt);
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp > receivedTimestamp + 5_000 ||
+    timestamp < receivedTimestamp - 5 * 60_000
+  ) {
+    return receivedAt;
+  }
+  return new Date(timestamp).toISOString();
+}
+
 async function getExtraction(
   requestedMode: AwbExtractionMode,
   file: File
 ): Promise<{
   normalized: AwbExtractionResponse;
   rawResponse: unknown;
+  processingTiming: ReturnType<typeof parseProviderTiming>;
 }> {
+  const normalizeTimed = (rawResponse: unknown, resultMode: AwbExtractionMode) => {
+    const normalized = normalizeExtraction(rawResponse, resultMode, file);
+    return {
+      normalized,
+      rawResponse,
+      processingTiming: parseProviderTiming(rawResponse),
+    };
+  };
   if (requestedMode === "mock") {
     await new Promise((resolve) => setTimeout(resolve, 450));
-    return {
-      normalized: normalizeExtraction(mockAwbApiResponse, "mock", file),
-      rawResponse: mockAwbApiResponse,
-    };
+    return normalizeTimed(mockAwbApiResponse, "mock");
   }
 
   try {
     const rawResponse = await callLiveExtraction(file);
-    return {
-      normalized: normalizeExtraction(rawResponse, "live", file),
-      rawResponse,
-    };
+    return normalizeTimed(rawResponse, "live");
   } catch (error) {
     if (requestedMode !== "fallback" || !(error instanceof ProviderError)) {
       throw error;
     }
-    const normalized = normalizeExtraction(mockAwbApiResponse, "fallback", file);
-    normalized.message = "Live extraction unavailable. Mock extraction was used.";
-    return { normalized, rawResponse: mockAwbApiResponse };
+    const result = normalizeTimed(mockAwbApiResponse, "fallback");
+    result.normalized.message = "Live extraction unavailable. Mock extraction was used.";
+    return result;
   }
 }
 
 export async function POST(request: Request) {
+  const requestReceivedAt = new Date().toISOString();
   const token = await extractBearerTokenFromRequest(request);
   if (!token || !(await getUserFromAccessToken(token))?.id) {
     return awbJsonResponse(
@@ -215,6 +237,10 @@ export async function POST(request: Request) {
   }
 
   const formData = await request.formData().catch(() => null);
+  const uploadStartedAt = normalizeUploadStartedAt(
+    formData?.get("uploadStartedAt") ?? null,
+    requestReceivedAt
+  );
   const file = formData?.get("file");
   if (!(file instanceof File)) {
     return awbJsonResponse(
@@ -271,13 +297,6 @@ export async function POST(request: Request) {
     fileSize: file.size,
     mode,
   });
-  await createAwbEvent({
-    companyId: access.companyId,
-    userId: access.userId,
-    eventType: "extraction_started",
-    title: "AI extraction started",
-    metadata: { mode, file_size: file.size },
-  });
 
   let extractionResult: Awaited<ReturnType<typeof getExtraction>>;
   try {
@@ -295,20 +314,11 @@ export async function POST(request: Request) {
       code: providerError.code,
       mode,
     });
-    const failedDocumentId = await createPersistedAwbFailure(
+    await createPersistedAwbFailure(
       access,
       file,
       mode
     ).catch(() => null);
-    await createAwbEvent({
-      documentId: failedDocumentId,
-      companyId: access.companyId,
-      userId: access.userId,
-      eventType: "extraction_failed",
-      title: "AI extraction failed",
-      message: providerError.message,
-      metadata: { error_code: providerError.code, mode },
-    });
     return awbJsonResponse(
       {
         ok: false,
@@ -319,49 +329,57 @@ export async function POST(request: Request) {
     );
   }
 
-  const { normalized, rawResponse } = extractionResult;
+  const {
+    normalized,
+    rawResponse,
+    processingTiming,
+  } = extractionResult;
   try {
     const document = await createPersistedAwbExtraction(
       access,
       normalized,
       file,
-      rawResponse
+      rawResponse,
+      awbTimingServerFlags.trackingEnabled ? processingTiming : undefined,
+      uploadStartedAt
     );
     normalized.document.id = document.id;
     normalized.document.status = document.status;
+    if (awbTimingServerFlags.trackingEnabled) {
+      normalized.meta.timingMetrics = {
+        processing: {
+          extractorMs: processingTiming.extractor_ms,
+          llmMs: processingTiming.llm_ms,
+          businessLogicMs: processingTiming.business_logic_ms,
+          totalMs:
+            processingTiming.total_ms ??
+            normalized.document.processingTimeMs ??
+            null,
+        },
+        review: {
+          activeMs: null,
+          method: null,
+        },
+        quality: {
+          correctedFieldsCount: null,
+        },
+        lifecycle: {
+          uploadStartedAt,
+          reviewReadyAt:
+            timingMetricsFromSummary(document.summary).reviewReadyAt,
+          issuedAt: null,
+          uploadToIssueMs: null,
+        },
+      };
+    }
     console.info("[awb-extract] extraction completed", {
       mode: normalized.mode,
       runId: normalized.meta.runId || null,
       entityCount: normalized.summary.totalFields,
       processingTimeMs: normalized.document.processingTimeMs,
     });
-    await createAwbEvent({
-      documentId: document.id,
-      companyId: access.companyId,
-      userId: access.userId,
-      eventType: "extraction_completed",
-      title: "AI extraction completed",
-      metadata: {
-        run_id: normalized.meta.runId || null,
-        mode: normalized.mode,
-        field_count: normalized.summary.totalFields,
-        average_confidence: normalized.summary.averageConfidence,
-        processing_time_ms: normalized.document.processingTimeMs,
-      },
-    });
     return awbJsonResponse({ ok: true, data: normalized }, 200);
   } catch {
-    await createAwbEvent({
-      companyId: access.companyId,
-      userId: access.userId,
-      eventType: "extraction_failed",
-      title: "AI extraction failed",
-      message: "The extracted AWB could not be persisted.",
-      metadata: {
-        error_code: "AWB_PERSISTENCE_FAILED",
-        mode: normalized.mode,
-      },
-    });
     return awbJsonResponse(
       {
         ok: false,

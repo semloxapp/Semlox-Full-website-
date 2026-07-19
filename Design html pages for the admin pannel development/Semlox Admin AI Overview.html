@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — AI Test Overview</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+<style>
+.chart-wrap{padding:14px 18px 18px}
+.legend{display:flex;gap:16px;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:2px}
+.donut-wrap{display:flex;align-items:center;gap:20px;padding:18px}
+.donut-legend{display:flex;flex-direction:column;gap:10px;flex:1}
+.dl-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.dl-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.dl-val{margin-left:auto;font-family:'Space Mono',monospace;font-weight:700;font-size:12px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+
+  const trendDays=['D1','D2','D3','D4','D5','D6','D7'];
+  const confSeries=[84,85.5,86,86.8,87.1,87.9,87.4];
+  const corrSeries=[13.2,12.1,11.4,10.8,10.2,9.5,9.8];
+
+  const mkPath=(vals,min,max,w,h)=>vals.map((v,i)=>{
+    const x=(i/(vals.length-1))*w;
+    const y=h-((v-min)/(max-min))*h;
+    return `${i===0?'M':'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const w=520,h=110;
+  const confPath=mkPath(confSeries,80,92,w,h);
+  const corrPath=mkPath(corrSeries,8,15,w,h);
+
+  const statusDist=[
+    {n:'Issued',v:309,c:'#10b981'},
+    {n:'Review Required',v:137,c:'#f59e0b'},
+    {n:'Draft',v:29,c:'#3b82f6'},
+    {n:'Failed',v:24,c:'#ef4444'},
+    {n:'Cancelled',v:11,c:'#64748b'},
+  ];
+  const total=statusDist.reduce((a,b)=>a+b.v,0);
+  let acc=0;
+  const gradParts=statusDist.map(s=>{
+    const start=(acc/total)*360; acc+=s.v; const end=(acc/total)*360;
+    return `${s.c} ${start}deg ${end}deg`;
+  }).join(', ');
+
+  const topFields=[
+    {n:'Consignee Name & Address',rate:31},
+    {n:'Handling Information',rate:26},
+    {n:'AWB Number',rate:18},
+    {n:'Gross Weight',rate:15},
+    {n:'Flight Date',rate:12},
+  ];
+
+  const highRisk=[
+    {doc:'AWB-2026-00481',company:'DB Schenker',conf:62,corrections:7,status:'Review Required'},
+    {doc:'AWB-2026-00397',company:'Kuehne + Nagel',conf:58,corrections:9,status:'Review Required'},
+    {doc:'AWB-2026-00512',company:'Maersk Supply Chain',conf:71,corrections:6,status:'Draft'},
+    {doc:'AWB-2026-00340',company:'DHL Express Global',conf:0,corrections:0,status:'Failed'},
+    {doc:'AWB-2026-00455',company:'DB Schenker',conf:65,corrections:8,status:'Review Required'},
+  ];
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="overview"/>
+      <div className="main">
+        <AdminTopbar title="AI Test Overview" sub="Test Run 004 · 486 AWBs · Model v1.2 · Updated 4 min ago" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="kpi-row">
+            <div className="kpi b"><div className="kpi-top"><div className="kpi-lbl">Documents Tested</div><div className="kpi-ic b"><AdminIc p={AdminI.doc} size={14}/></div></div><div className="kpi-val">486</div><div className="kpi-foot">Test Run 004 · Model v1.2</div></div>
+            <div className="kpi g"><div className="kpi-top"><div className="kpi-lbl">Successfully Processed</div><div className="kpi-ic g"><AdminIc p={AdminI.check} size={14}/></div></div><div className="kpi-val">462</div><div className="kpi-foot">95.1% processing success</div></div>
+            <div className="kpi a"><div className="kpi-top"><div className="kpi-lbl">Review Required</div><div className="kpi-ic a"><AdminIc p={AdminI.warn} size={14}/></div></div><div className="kpi-val">137</div><div className="kpi-foot">28.2% of processed documents</div></div>
+            <div className="kpi r"><div className="kpi-top"><div className="kpi-lbl">Failed Documents</div><div className="kpi-ic r"><AdminIc p={AdminI.x} size={14}/></div></div><div className="kpi-val">24</div><div className="kpi-foot">4.9% processing failure</div></div>
+          </div>
+          <div className="kpi-row">
+            <div className="kpi p"><div className="kpi-top"><div className="kpi-lbl">Total Fields Extracted</div><div className="kpi-ic p"><AdminIc p={AdminI.layers} size={14}/></div></div><div className="kpi-val">7,776</div><div className="kpi-foot">across all documents</div></div>
+            <div className="kpi c"><div className="kpi-top"><div className="kpi-lbl">Average AI Confidence</div><div className="kpi-ic c"><AdminIc p={AdminI.brain} size={14}/></div></div><div className="kpi-val">87.4%</div><div className="kpi-foot">confidence is not accuracy</div></div>
+            <div className="kpi a"><div className="kpi-top"><div className="kpi-lbl">Human Correction Rate</div><div className="kpi-ic a"><AdminIc p={AdminI.edit} size={14}/></div></div><div className="kpi-val">9.8%</div><div className="kpi-foot">762 fields changed of 7,776</div></div>
+            <div className="kpi b"><div className="kpi-top"><div className="kpi-lbl">Avg Processing Time</div><div className="kpi-ic b"><AdminIc p={AdminI.clock} size={14}/></div></div><div className="kpi-val">31.6s</div><div className="kpi-foot">P95: 48.3s</div></div>
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Confidence & Correction Trend</div><div className="card-s">Across the last 7 test batches</div></div></div>
+              <div className="chart-wrap">
+                <div className="legend"><span className="legend-item"><span className="legend-dot" style={{background:'#3b82f6'}}/>AI Confidence</span><span className="legend-item"><span className="legend-dot" style={{background:'#f59e0b'}}/>Correction Rate</span></div>
+                <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+                  <path d={confPath} fill="none" stroke="#3b82f6" strokeWidth="2.5"/>
+                  <path d={corrPath} fill="none" stroke="#f59e0b" strokeWidth="2.5"/>
+                </svg>
+                <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>{trendDays.map(d=><span key={d} style={{fontSize:9,color:'var(--muted)',fontFamily:'Space Mono'}}>{d}</span>)}</div>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Document Status Distribution</div><div className="card-s">486 documents in Test Run 004</div></div></div>
+              <div className="donut-wrap">
+                <div style={{width:130,height:130,borderRadius:'50%',background:`conic-gradient(${gradParts})`,flexShrink:0,position:'relative'}}>
+                  <div style={{position:'absolute',inset:22,borderRadius:'50%',background:'var(--card)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column'}}>
+                    <div style={{fontSize:20,fontWeight:700,fontFamily:'Space Mono'}}>486</div>
+                    <div style={{fontSize:9,color:'var(--muted)'}}>total</div>
+                  </div>
+                </div>
+                <div className="donut-legend">
+                  {statusDist.map(s=>(<div key={s.n} className="dl-row"><span className="dl-dot" style={{background:s.c}}/>{s.n}<span className="dl-val" style={{color:s.c}}>{s.v}</span></div>))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Top 5 Problematic Fields</div><div className="card-s">Ranked by human correction rate</div></div><button className="card-link" onClick={()=>location.href='Semlox Admin Field Intelligence.html'}>View all fields</button></div>
+              {topFields.map((f,i)=>(<div key={i} className="fe-row"><span className="fe-name">{f.n}</span><div className="fe-bar"><div className="fe-fill" style={{width:`${f.rate*2.8}%`,background:f.rate>25?'#ef4444':f.rate>15?'#f59e0b':'#3b82f6'}}/></div><span className="fe-pct" style={{color:f.rate>25?'#ef4444':f.rate>15?'#f59e0b':'#3b82f6'}}>{f.rate}%</span></div>))}
+            </div>
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Correction Distribution</div><div className="card-s">How many documents needed edits</div></div></div>
+              <div style={{padding:'16px 18px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                <div style={{padding:'14px',borderRadius:10,background:'rgba(16,185,129,0.06)',border:'1px solid rgba(16,185,129,0.15)'}}><div style={{fontSize:22,fontWeight:700,fontFamily:'Space Mono',color:'var(--green)'}}>172</div><div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Zero-correction documents</div></div>
+                <div style={{padding:'14px',borderRadius:10,background:'rgba(239,68,68,0.06)',border:'1px solid rgba(239,68,68,0.15)'}}><div style={{fontSize:22,fontWeight:700,fontFamily:'Space Mono',color:'var(--red)'}}>41</div><div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Documents with 5+ corrections</div></div>
+                <div style={{padding:'14px',borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:22,fontWeight:700,fontFamily:'Space Mono',color:'var(--blue)'}}>2.3</div><div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Avg corrections / document</div></div>
+                <div style={{padding:'14px',borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:22,fontWeight:700,fontFamily:'Space Mono',color:'var(--purple)'}}>89.6%</div><div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Field validation rate</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Recent High-Risk Documents</div><div className="card-s">Low confidence, high correction count, or failed</div></div><button className="card-link" onClick={()=>location.href='Semlox Admin Document Audit.html'}>Open Document Audit</button></div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Document</th><th>Company</th><th>Confidence</th><th>Corrections</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {highRisk.map((d,i)=>(
+                    <tr key={i} onClick={()=>location.href='Semlox Admin Document Audit.html'}>
+                      <td><span className="co-name">{d.doc}</span></td>
+                      <td>{d.company}</td>
+                      <td>{d.conf>0?<ConfidenceBadge v={d.conf}/>:<span style={{color:'var(--muted)'}}>—</span>}</td>
+                      <td><span className="num-cell">{d.corrections}</span></td>
+                      <td><StatusBadge status={d.status}/></td>
+                      <td style={{color:'var(--muted)'}}><AdminIc p={AdminI.chevronRight} size={13}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

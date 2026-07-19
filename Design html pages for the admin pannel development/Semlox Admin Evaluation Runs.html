@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Evaluation Runs</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+<style>.runs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+const RUNS=[
+  {name:'AWB Benchmark Run 004',dataset:'Mixed carriers · 486 docs',docs:486,model:'v1.2',started:'2026-07-14 09:00',completed:'2026-07-14 11:20',success:95.1,corr:9.8,fail:4.9,avgt:'31.6s',p95:'48.3s',status:'Completed'},
+  {name:'AWB Benchmark Run 003',dataset:'Mixed carriers · 420 docs',docs:420,model:'v1.1',started:'2026-06-28 09:00',completed:'2026-06-28 11:40',success:91.4,corr:16.4,fail:8.6,avgt:'38.9s',p95:'61.2s',status:'Completed'},
+  {name:'Model v1.2 Benchmark',dataset:'Scanned + fax subset · 140 docs',docs:140,model:'v1.2',started:'2026-07-10 14:00',completed:'2026-07-10 15:10',success:93.6,corr:11.2,fail:6.4,avgt:'34.0s',p95:'52.1s',status:'Completed'},
+  {name:'AWB Benchmark Run 002',dataset:'Mixed carriers · 310 docs',docs:310,model:'v1.0',started:'2026-06-10 09:00',completed:'2026-06-10 12:05',success:85.2,corr:22.7,fail:14.8,avgt:'44.5s',p95:'70.4s',status:'Completed'},
+];
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+  const [selectedForCompare,setSelectedForCompare]=useState([]);
+  const [detail,setDetail]=useState(null);
+
+  const toggleCompare=(name)=>{
+    setSelectedForCompare(prev=>prev.includes(name)?prev.filter(n=>n!==name):prev.length<2?[...prev,name]:[prev[1],name]);
+  };
+  const compareRuns=RUNS.filter(r=>selectedForCompare.includes(r.name));
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="runs"/>
+      <div className="main">
+        <AdminTopbar title="Evaluation Runs" sub="Each 400–500 document test as a benchmark run · compare model versions" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="filter-bar">
+            <span style={{fontSize:11,color:'var(--muted)'}}>Select two runs to compare</span>
+            <button className="btn btn-primary" style={{marginLeft:'auto'}} disabled={compareRuns.length!==2} onClick={()=>{}}><AdminIc p={AdminI.compare} size={13}/>Compare Selected</button>
+          </div>
+
+          {compareRuns.length===2 && (
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">{compareRuns[0].name} vs {compareRuns[1].name}</div><div className="card-s">Run comparison</div></div></div>
+              <div className="tbl-wrap"><table className="tbl">
+                <thead><tr><th>Metric</th><th>{compareRuns[0].name}</th><th>{compareRuns[1].name}</th><th>Δ</th></tr></thead>
+                <tbody>
+                  {[['Success Rate','success','%'],['Correction Rate','corr','%'],['Failure Rate','fail','%'],['Avg Processing Time','avgt',''],['P95 Processing Time','p95','']].map(([l,k,u])=>{
+                    const a=compareRuns[0][k],b=compareRuns[1][k];
+                    const numA=parseFloat(a),numB=parseFloat(b);
+                    const delta=(numB-numA).toFixed(1);
+                    const good=k==='success'?delta>0:delta<0;
+                    return (<tr key={l}><td>{l}</td><td className="num-cell">{a}{u}</td><td className="num-cell">{b}{u}</td><td className="num-cell" style={{color:good?'var(--green)':'var(--red)'}}>{delta>0?'+':''}{delta}{u}</td></tr>);
+                  })}
+                </tbody>
+              </table></div>
+              <div style={{padding:'0 18px 16px'}}>
+                <div style={{padding:'11px 14px',borderRadius:10,background:'rgba(16,185,129,0.06)',border:'1px solid rgba(16,185,129,0.18)',fontSize:11,color:'var(--text2)',lineHeight:1.6}}>
+                  {compareRuns[1].model} reduced correction rate by {(compareRuns[0].corr-compareRuns[1].corr).toFixed(1)} points and processing time by {(parseFloat(compareRuns[0].avgt)-parseFloat(compareRuns[1].avgt)).toFixed(1)}s vs {compareRuns[0].model}.
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="runs-grid">
+            {RUNS.map((r,i)=>(
+              <div key={i} className="run-card" onClick={()=>setDetail(r)}>
+                <div className="run-top">
+                  <div>
+                    <div className="run-name">{r.name}</div>
+                    <div className="run-meta">{r.dataset} · Model {r.model}</div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <StatusBadge status={r.status==='Completed'?'Issued':r.status}/>
+                    <input type="checkbox" checked={selectedForCompare.includes(r.name)} onChange={e=>{e.stopPropagation();toggleCompare(r.name);}} onClick={e=>e.stopPropagation()}/>
+                  </div>
+                </div>
+                <div className="run-stats">
+                  <div><div className="run-stat-val" style={{color:'var(--green)'}}>{r.success}%</div><div className="run-stat-lbl">Success</div></div>
+                  <div><div className="run-stat-val" style={{color:'var(--amber)'}}>{r.corr}%</div><div className="run-stat-lbl">Correction</div></div>
+                  <div><div className="run-stat-val" style={{color:'var(--red)'}}>{r.fail}%</div><div className="run-stat-lbl">Failure</div></div>
+                  <div><div className="run-stat-val" style={{color:'var(--blue)'}}>{r.avgt}</div><div className="run-stat-lbl">Avg Time</div></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {detail && (
+        <div className="drawer-overlay" onClick={()=>setDetail(null)}>
+          <div className="drawer" onClick={e=>e.stopPropagation()}>
+            <div className="drawer-hd"><div><div style={{fontSize:15,fontWeight:700}}>{detail.name}</div><div style={{fontSize:11,color:'var(--muted)'}}>{detail.started} → {detail.completed}</div></div><button className="drawer-close" onClick={()=>setDetail(null)}><AdminIc p={AdminI.x} size={16}/></button></div>
+            <div className="drawer-body">
+              <div className="grid-2" style={{gap:10}}>
+                {[['Documents',detail.docs,'#3b82f6'],['Model',detail.model,'#8b5cf6'],['Success Rate',detail.success+'%','#10b981'],['Correction Rate',detail.corr+'%','#f59e0b'],['Avg Time',detail.avgt,'#06b6d4'],['P95 Time',detail.p95,'#06b6d4']].map(([l,v,c])=>(
+                  <div key={l} style={{padding:12,borderRadius:10,background:'var(--input-bg)',border:'1px solid var(--input-b)'}}><div style={{fontSize:18,fontWeight:700,fontFamily:'Space Mono',color:c}}>{v}</div><div style={{fontSize:10,color:'var(--muted)',marginTop:4}}>{l}</div></div>
+                ))}
+              </div>
+              <button className="btn btn-primary" style={{justifyContent:'center'}} onClick={()=>location.href='Semlox Admin Document Audit.html'}>View documents in this run</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

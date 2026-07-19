@@ -1,0 +1,8 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { requirePlatformAdmin } from "@/lib/admin/server/auth";
+import { getAdminPerformance } from "@/lib/admin/server/performance-service";
+import { parseAdminAnalyticsScope } from "@/lib/admin/server/validation";
+const privateHeaders = { "Cache-Control": "private, no-store, max-age=0" };
+export async function GET(request: NextRequest) { const startedAt = Date.now(); const guard = await requirePlatformAdmin(); if (!guard.ok) return NextResponse.json({ ok: false, code: guard.code, message: guard.status === 401 ? "Authentication is required." : "You are not authorized to access this resource." }, { status: guard.status, headers: privateHeaders }); const scope = parseAdminAnalyticsScope(request.nextUrl.searchParams); if (!scope.ok) return NextResponse.json({ ok: false, code: scope.code, message: scope.message }, { status: 400, headers: privateHeaders }); try { const data = await getAdminPerformance(scope.value); console.info("[admin-analytics] performance", { validSamples: data.summary.validProcessingSampleCount, durationMs: Date.now() - startedAt }); return NextResponse.json({ ok: true, data }, { headers: privateHeaders }); } catch { console.error("[admin-analytics] performance failed", { code: "PERFORMANCE_QUERY_FAILED", durationMs: Date.now() - startedAt }); return NextResponse.json({ ok: false, code: "PERFORMANCE_QUERY_FAILED", message: "Performance data could not be loaded." }, { status: 500, headers: privateHeaders }); } }
+export const runtime = "nodejs"; export const dynamic = "force-dynamic";

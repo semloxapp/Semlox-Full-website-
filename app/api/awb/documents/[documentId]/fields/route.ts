@@ -54,10 +54,7 @@ export async function PATCH(
         404
       );
     }
-    const result = await updateAwbFields(documentId, access.userId, updates, {
-      companyId: access.document.company_id,
-      changeSource: "user_edit",
-    });
+    const result = await updateAwbFields(documentId, access.userId, updates);
     return awbJsonResponse({ ok: true, data: result });
   } catch {
     return awbJsonResponse(

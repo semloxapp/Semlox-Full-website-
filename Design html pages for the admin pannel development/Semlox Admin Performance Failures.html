@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SemloX — Performance & Failures</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link href="admin-shared.css" rel="stylesheet"/>
+<style>
+.stage-bar{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:4px 18px 16px}
+.stage-seg{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;font-family:'Space Mono',monospace}
+.funnel-row{display:flex;align-items:center;gap:12px;padding:9px 18px}
+.funnel-bar{height:24px;border-radius:6px;background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.funnel-lbl{font-size:11px;color:var(--text2);width:150px;flex-shrink:0}
+.funnel-val{font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);width:60px;text-align:right}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="admin-shared.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+
+const STAGES=[
+  {n:'Upload',v:6,c:'#3b82f6'},{n:'OCR',v:38,c:'#8b5cf6'},{n:'Field Extraction',v:21,c:'#06b6d4'},
+  {n:'Validation',v:9,c:'#f59e0b'},{n:'Normalization',v:5,c:'#00d4aa'},{n:'Storage',v:4,c:'#64748b'},
+];
+const totalStage=STAGES.reduce((a,b)=>a+b.v,0);
+
+const HIST=[
+  {r:'<10s',v:38},{r:'10-20s',v:96},{r:'20-30s',v:172},{r:'30-45s',v:118},{r:'45-60s',v:44},{r:'>60s',v:18},
+];
+const maxHist=Math.max(...HIST.map(h=>h.v));
+
+const FUNNEL=[
+  {n:'Uploaded',v:486},{n:'OCR Completed',v:478},{n:'Fields Extracted',v:468},{n:'Validated',v:462},{n:'Reviewed',v:325},{n:'Issued',v:309},
+];
+const maxFunnel=FUNNEL[0].v;
+
+const SLOW_DOCS=[
+  {doc:'AWB-2026-00512',company:'Maersk Supply Chain',size:'4.2MB',pages:3,time:'71.4s',stage:'OCR',retries:2,status:'Draft'},
+  {doc:'AWB-2026-00397',company:'Kuehne + Nagel',size:'3.8MB',pages:2,time:'64.9s',stage:'Field Extraction',retries:1,status:'Review Required'},
+  {doc:'AWB-2026-00481',company:'DB Schenker',size:'2.9MB',pages:2,time:'58.2s',stage:'OCR',retries:1,status:'Review Required'},
+];
+const FAILURES=[
+  {time:'2026-07-14 10:12',doc:'AWB-2026-00340',company:'DHL Express Global',stage:'OCR',cat:'Corrupted document',msg:'Unable to read page 1 — file integrity check failed',retries:2,resolved:false},
+  {time:'2026-07-13 14:05',doc:'AWB-2026-00288',company:'Kuehne + Nagel',stage:'Field Extraction',cat:'Model extraction failure',msg:'Extraction service returned empty response',retries:3,resolved:true},
+  {time:'2026-07-12 09:44',doc:'AWB-2026-00204',company:'Maersk Supply Chain',stage:'Upload',cat:'Unsupported file',msg:'File type .heic not supported',retries:0,resolved:true},
+];
+
+function App(){
+  const [theme,setTheme]=useAdminTheme();
+
+  return (
+    <div className="shell">
+      <AdminSidebar active="performance"/>
+      <div className="main">
+        <AdminTopbar title="Processing Performance & Failure Intelligence" sub="Speed, technical reliability, and failure analysis across Test Run 004" theme={theme} setTheme={setTheme}/>
+        <div className="content">
+          <div className="kpi-row">
+            <div className="kpi b"><div className="kpi-top"><div className="kpi-lbl">Avg Processing Time</div><div className="kpi-ic b"><AdminIc p={AdminI.clock} size={14}/></div></div><div className="kpi-val">31.6s</div><div className="kpi-foot">median 28.4s</div></div>
+            <div className="kpi c"><div className="kpi-top"><div className="kpi-lbl">P90 / P95 / P99</div><div className="kpi-ic c"><AdminIc p={AdminI.gauge} size={14}/></div></div><div className="kpi-val" style={{fontSize:19}}>41 / 48 / 66s</div><div className="kpi-foot">seconds</div></div>
+            <div className="kpi a"><div className="kpi-top"><div className="kpi-lbl">Timeout / Retry Rate</div><div className="kpi-ic a"><AdminIc p={AdminI.warn} size={14}/></div></div><div className="kpi-val">2.1% / 6.4%</div><div className="kpi-foot">of all runs</div></div>
+            <div className="kpi r"><div className="kpi-top"><div className="kpi-lbl">Failed Documents</div><div className="kpi-ic r"><AdminIc p={AdminI.x} size={14}/></div></div><div className="kpi-val">24</div><div className="kpi-foot">4.9% of 486</div></div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Stage Duration Breakdown</div><div className="card-s">Average share of total processing time per stage</div></div></div>
+            <div className="stage-bar">{STAGES.map((s,i)=>(<div key={i} className="stage-seg" style={{width:`${(s.v/totalStage)*100}%`,background:s.c}}>{s.n} {Math.round((s.v/totalStage)*100)}%</div>))}</div>
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Processing Time Distribution</div><div className="card-s">Document count per time bucket</div></div></div>
+              <div style={{padding:'14px 18px'}}>
+                {HIST.map((h,i)=>(<div key={i} className="hist-row" style={{marginBottom:8}}><span className="hist-lbl">{h.r}</span><div className="hist-track"><div className="hist-fill" style={{width:`${(h.v/maxHist)*100}%`}}/></div><span className="hist-val">{h.v}</span></div>))}
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-hd"><div><div className="card-t">Processing Lifecycle Funnel</div><div className="card-s">Document drop-off through the pipeline</div></div></div>
+              <div style={{padding:'14px 0'}}>
+                {FUNNEL.map((f,i)=>(<div key={i} className="funnel-row"><span className="funnel-lbl">{f.n}</span><div style={{flex:1}}><div className="funnel-bar" style={{width:`${(f.v/maxFunnel)*100}%`}}/></div><span className="funnel-val">{f.v}</span></div>))}
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Slowest Documents</div><div className="card-s">Longest processing time this run</div></div></div>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Document</th><th>Company</th><th>File Size</th><th>Pages</th><th>Time</th><th>Slowest Stage</th><th>Retries</th><th>Status</th></tr></thead>
+              <tbody>{SLOW_DOCS.map((d,i)=>(<tr key={i} onClick={()=>location.href='Semlox Admin Document Audit.html'}><td className="co-name">{d.doc}</td><td>{d.company}</td><td className="num-cell">{d.size}</td><td className="num-cell">{d.pages}</td><td className="num-cell" style={{color:'var(--red)'}}>{d.time}</td><td>{d.stage}</td><td className="num-cell">{d.retries}</td><td><StatusBadge status={d.status}/></td></tr>))}</tbody>
+            </table></div>
+          </div>
+
+          <div className="card">
+            <div className="card-hd"><div><div className="card-t">Failure Log</div><div className="card-s">Errors captured during processing — safe messages only</div></div></div>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Time</th><th>Document</th><th>Company</th><th>Stage</th><th>Category</th><th>Message</th><th>Retries</th><th>Resolved</th></tr></thead>
+              <tbody>{FAILURES.map((f,i)=>(<tr key={i}><td style={{fontFamily:'Space Mono',fontSize:10,color:'var(--muted)'}}>{f.time}</td><td className="co-name">{f.doc}</td><td>{f.company}</td><td><span className="badge badge-blue">{f.stage}</span></td><td><span className="badge badge-red">{f.cat}</span></td><td style={{fontSize:11,color:'var(--muted)'}}>{f.msg}</td><td className="num-cell">{f.retries}</td><td>{f.resolved?<span className="badge badge-green">Resolved</span>:<span className="badge badge-amber">Open</span>}</td></tr>))}</tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

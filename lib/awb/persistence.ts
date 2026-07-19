@@ -13,6 +13,16 @@ import type {
   AwbFieldStatus,
 } from "./types";
 import { awbSummaryFromFields } from "./fieldStats";
+import {
+  applyReviewCheckpoint,
+  asRecord,
+  countCorrectedFields,
+  mergeAwbTimingSummary,
+  timingMetricsFromSummary,
+  type ProcessingTimingMetrics,
+  type ReviewCheckpoint,
+} from "./timingMetrics";
+export { validateAwbForIssue } from "./issueValidation";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,7 +48,7 @@ export type DocumentRow = {
   run_id: string | null;
   pages: number | null;
   processing_time_ms: number | null;
-  summary: AwbExtractionResponse["summary"] | null;
+  summary: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -136,49 +146,6 @@ export async function createAwbSourceSignedUrl(storagePath: string | null | unde
   return data.signedUrl;
 }
 
-async function bestEffortInsert(table: string, body: unknown) {
-  if (!supabaseUrl || !supabaseServiceRoleKey) return false;
-  try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
-      method: "POST",
-      headers: serviceHeaders({ Prefer: "return=minimal" }),
-      body: JSON.stringify(body),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-export async function createAwbEvent(input: {
-  documentId?: string | null;
-  companyId: string;
-  userId: string;
-  eventType:
-    | "uploaded"
-    | "extraction_started"
-    | "extraction_completed"
-    | "extraction_failed"
-    | "field_updated"
-    | "draft_saved"
-    | "issued"
-    | "exported_pdf"
-    | "downloaded";
-  title: string;
-  message?: string | null;
-  metadata?: Record<string, unknown>;
-}) {
-  return bestEffortInsert("awb_events", {
-    document_id: input.documentId || null,
-    company_id: input.companyId,
-    user_id: input.userId,
-    event_type: input.eventType,
-    event_title: input.title,
-    event_message: input.message || null,
-    metadata: input.metadata || {},
-  });
-}
-
 export function isAwbUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
@@ -217,7 +184,9 @@ export async function createPersistedAwbExtraction(
   context: AwbAccessContext,
   extraction: AwbExtractionResponse,
   file: File,
-  rawResponse: unknown = null
+  rawResponse: unknown = null,
+  processingTiming?: ProcessingTimingMetrics,
+  uploadStartedAt?: string
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const documentResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?select=*`, {
@@ -294,6 +263,32 @@ export async function createPersistedAwbExtraction(
       headers: serviceHeaders(),
     }).catch(() => null);
     throw new Error("Failed to create AWB fields");
+  }
+
+  if (processingTiming) {
+    const reviewReadyAt = new Date().toISOString();
+    const mergedSummary = mergeAwbTimingSummary(extraction.summary, {
+      processing: processingTiming,
+      lifecycle: {
+        upload_started_at: uploadStartedAt ?? document.created_at,
+        review_ready_at: reviewReadyAt,
+      },
+    });
+    const timingResponse = await fetch(
+      `${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`,
+      {
+        method: "PATCH",
+        headers: serviceHeaders({ Prefer: "return=minimal" }),
+        body: JSON.stringify({ summary: mergedSummary }),
+      }
+    );
+    if (!timingResponse.ok) {
+      console.error("[awb-metrics] failed to persist review-ready timing", {
+        documentId: document.id,
+        companyId: context.companyId,
+      });
+    }
+    document.summary = mergedSummary;
   }
 
   return document;
@@ -419,6 +414,39 @@ function historyAction(status: DocumentRow["status"]) {
   return "Initial Extraction";
 }
 
+async function getAwbHistoryFields(documentIds: string[]) {
+  if (!supabaseUrl || !documentIds.length) return [];
+  const documentIdBatches: string[][] = [];
+  for (let index = 0; index < documentIds.length; index += 40) {
+    documentIdBatches.push(documentIds.slice(index, index + 40));
+  }
+
+  const batchResults = await Promise.all(
+    documentIdBatches.map(async (batch) => {
+      const rows: FieldRow[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/awb_fields` +
+            `?document_id=in.(${batch.join(",")})` +
+            "&select=id,document_id,key,label,value,original_value,confidence,needs_review,status,color,comment,page,source,edited_by,edited_at" +
+            "&order=id.asc" +
+            `&limit=1000&offset=${offset}`,
+          { headers: serviceHeaders() }
+        );
+        const page = response.ok ? await response.json().catch(() => null) : null;
+        if (!response.ok || !Array.isArray(page)) {
+          throw new Error("Failed to load AWB history fields");
+        }
+        rows.push(...(page as FieldRow[]));
+        if (page.length < 1000) break;
+      }
+      return rows;
+    })
+  );
+
+  return batchResults.flat();
+}
+
 export async function getAwbHistory(
   context: AwbAccessContext,
   scope: "my" | "company"
@@ -447,11 +475,8 @@ export async function getAwbHistory(
 
   const documentIds = documents.map((document) => document.id);
   const userIds = Array.from(new Set(documents.map((document) => document.uploaded_by)));
-  const [fieldsResponse, profilesResponse, usersResponse] = await Promise.all([
-    fetch(
-      `${supabaseUrl}/rest/v1/awb_fields?document_id=in.(${documentIds.join(",")})&select=*`,
-      { headers: serviceHeaders() }
-    ),
+  const [fieldRows, profilesResponse, usersResponse] = await Promise.all([
+    getAwbHistoryFields(documentIds),
     fetch(`${supabaseUrl}/rest/v1/profiles?id=in.(${userIds.join(",")})&select=id,full_name`, {
       headers: serviceHeaders(),
     }),
@@ -459,13 +484,11 @@ export async function getAwbHistory(
       headers: serviceHeaders(),
     }),
   ]);
-  const fieldRows = fieldsResponse.ok ? await fieldsResponse.json().catch(() => []) : [];
   const profiles = profilesResponse.ok ? await profilesResponse.json().catch(() => []) : [];
   const users = usersResponse.ok ? await usersResponse.json().catch(() => []) : [];
-  if (!Array.isArray(fieldRows)) throw new Error("Failed to load AWB history fields");
 
   const fieldsByDocument = new Map<string, FieldRow[]>();
-  for (const field of fieldRows as FieldRow[]) {
+  for (const field of fieldRows) {
     const current = fieldsByDocument.get(field.document_id) || [];
     current.push(field);
     fieldsByDocument.set(field.document_id, current);
@@ -559,6 +582,7 @@ export function toAwbExtractionResponse(
 ): AwbExtractionResponse {
   const fields = fieldRows.map(fieldFromRow);
   const summary = summarizeAwbFields(fields);
+  const timing = timingMetricsFromSummary(document.summary);
   return {
     ok: true,
     mode: document.extraction_mode,
@@ -577,6 +601,27 @@ export function toAwbExtractionResponse(
     meta: {
       runId: document.run_id || undefined,
       totalSeconds: document.processing_time_ms ? document.processing_time_ms / 1000 : undefined,
+      timingMetrics: {
+        processing: {
+          extractorMs: timing.extractorMs,
+          llmMs: timing.llmMs,
+          businessLogicMs: timing.businessLogicMs,
+          totalMs: timing.totalMs ?? document.processing_time_ms ?? null,
+        },
+        review: {
+          activeMs: timing.activeReviewMs,
+          method: timing.reviewMethod,
+        },
+        quality: {
+          correctedFieldsCount: timing.correctedFieldsCount,
+        },
+        lifecycle: {
+          uploadStartedAt: timing.uploadStartedAt,
+          reviewReadyAt: timing.reviewReadyAt,
+          issuedAt: timing.issuedAt,
+          uploadToIssueMs: timing.uploadToIssueMs,
+        },
+      },
     },
     warnings: fields
       .filter((field) => field.status !== "valid")
@@ -587,11 +632,7 @@ export function toAwbExtractionResponse(
 export async function updateAwbFields(
   documentId: string,
   userId: string,
-  updates: Array<{ key: string; value: string }>,
-  options?: {
-    companyId?: string;
-    changeSource?: "user_edit" | "draft_save" | "issue_save" | "system";
-  }
+  updates: Array<{ key: string; value: string }>
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const existingRows = await getAwbFields(documentId);
@@ -623,45 +664,25 @@ export async function updateAwbFields(
     if (!response.ok) throw new Error("Failed to update AWB field");
     changedCount += 1;
 
-    if (options?.companyId) {
-      await bestEffortInsert("awb_field_revisions", {
-        document_id: documentId,
-        field_id: existing.id,
-        company_id: options.companyId,
-        field_key: existing.key,
-        field_label: existing.label,
-        old_value: existing.value,
-        new_value: value,
-        changed_by: userId,
-        changed_at: editedAt,
-        ai_original_value: existing.original_value,
-        ai_confidence: Number(existing.confidence) || 0,
-        ai_status: existing.status,
-        change_source: options.changeSource || "user_edit",
-      });
-      await createAwbEvent({
-        documentId,
-        companyId: options.companyId,
-        userId,
-        eventType: "field_updated",
-        title: "AWB field updated",
-        metadata: {
-          field_key: existing.key,
-          field_label: existing.label,
-          change_source: options.changeSource || "user_edit",
-        },
-      });
-    }
   }
 
   const fields = await getAwbFields(documentId);
   const normalizedFields = fields.map(fieldFromRow);
   const summary = summarizeAwbFields(normalizedFields);
   const status = summary.needsReview > 0 ? "review_required" : "ready_to_issue";
+  const currentDocumentResponse = await fetch(
+    `${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}&select=summary`,
+    { headers: serviceHeaders() }
+  );
+  const currentDocuments = currentDocumentResponse.ok
+    ? await currentDocumentResponse.json().catch(() => [])
+    : [];
+  if (!currentDocumentResponse.ok) throw new Error("Failed to load AWB document summary");
+  const mergedSummary = { ...asRecord(currentDocuments?.[0]?.summary), ...summary };
   const documentResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
     method: "PATCH",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
-    body: JSON.stringify({ summary, status }),
+    body: JSON.stringify({ summary: mergedSummary, status }),
   });
   if (!documentResponse.ok) throw new Error("Failed to update AWB document");
   return { fields: normalizedFields, summary, status, changedCount };
@@ -677,43 +698,9 @@ export async function setAwbDocumentDraft(documentId: string) {
   if (!response.ok) throw new Error("Failed to save AWB draft");
 }
 
-export const REQUIRED_AWB_FIELDS = [
-  "awb_number",
-  "shipper_name_address",
-  "consignee_name_address",
-  "origin_airport",
-  "destination_airport",
-  "issuing_carrier",
-  "flight_date",
-  "pieces",
-  "gross_weight",
-  "chargeable_weight",
-  "weight_unit",
-  "nature_and_quantity_of_goods",
-] as const;
-
-export function validateAwbForIssue(fields: AwbExtractedField[]) {
-  const byKey = new Map(fields.map((field) => [field.key, field]));
-  const invalidFields = REQUIRED_AWB_FIELDS.flatMap((key) => {
-    const field = byKey.get(key);
-    if (field && !field.value.trim()) {
-      return [{
-        key,
-        label: field.label,
-        message: "Required value is missing.",
-      }];
-    }
-    return [];
-  });
-  const warningFields = fields
-    .filter((field) => field.status === "warning")
-    .map((field) => ({ key: field.key, label: field.label }));
-  return { invalidFields, warningFields };
-}
-
 export async function setAwbDocumentIssued(
   documentId: string,
-  summary?: AwbExtractionResponse["summary"],
+  summary?: Record<string, unknown>,
   storagePath?: string | null
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
@@ -728,4 +715,75 @@ export async function setAwbDocumentIssued(
     }),
   });
   if (!response.ok) throw new Error("Failed to issue AWB");
+}
+
+export async function recordReviewCheckpoint(
+  documentId: string,
+  checkpoint: ReviewCheckpoint
+) {
+  if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}&select=summary`,
+    { headers: serviceHeaders() }
+  );
+  const rows = response.ok ? await response.json().catch(() => []) : [];
+  if (!response.ok || !rows?.[0]) throw new Error("Failed to load AWB timing summary");
+  const result = applyReviewCheckpoint(
+    rows[0].summary,
+    checkpoint,
+    new Date().toISOString()
+  );
+  const activeMs =
+    timingMetricsFromSummary(result.summary).activeReviewMs ?? 0;
+  if (!result.accepted) return { accepted: false, activeMs };
+  const patch = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${documentId}`, {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ summary: result.summary }),
+  });
+  if (!patch.ok) throw new Error("Failed to save AWB review timing");
+  return { accepted: true, activeMs };
+}
+
+export function buildIssuedTimingSummary(input: {
+  document: DocumentRow;
+  fields: FieldRow[];
+  fieldSummary?: Record<string, unknown>;
+  checkpoint?: ReviewCheckpoint | null;
+  issuedAt: string;
+}) {
+  let summary: unknown = {
+    ...asRecord(input.document.summary),
+    ...asRecord(input.fieldSummary),
+  };
+  if (input.checkpoint) {
+    summary = applyReviewCheckpoint(summary, input.checkpoint, input.issuedAt).summary;
+  }
+  const lifecycle = asRecord(asRecord(asRecord(summary).timing_metrics).lifecycle);
+  const existingIssuedAt =
+    typeof lifecycle.issued_at === "string" &&
+    Number.isFinite(Date.parse(lifecycle.issued_at))
+      ? lifecycle.issued_at
+      : null;
+  const effectiveIssuedAt = existingIssuedAt ?? input.issuedAt;
+  const uploadStartedAt =
+    typeof lifecycle.upload_started_at === "string" &&
+    Number.isFinite(Date.parse(lifecycle.upload_started_at))
+      ? lifecycle.upload_started_at
+      : input.document.created_at;
+  const uploadStartedAtMs = Date.parse(uploadStartedAt);
+  const issuedAtMs = Date.parse(effectiveIssuedAt);
+  return mergeAwbTimingSummary(summary, {
+    quality: {
+      corrected_fields_count: countCorrectedFields(input.fields),
+      calculated_at: input.issuedAt,
+    },
+    lifecycle: {
+      issued_at: effectiveIssuedAt,
+      upload_to_issue_ms:
+        Number.isFinite(uploadStartedAtMs) && Number.isFinite(issuedAtMs)
+          ? Math.max(0, issuedAtMs - uploadStartedAtMs)
+          : null,
+    },
+  });
 }

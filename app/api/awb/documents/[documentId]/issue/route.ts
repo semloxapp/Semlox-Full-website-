@@ -1,6 +1,6 @@
 import {
   awbJsonResponse,
-  createAwbEvent,
+  buildIssuedTimingSummary,
   getAwbDocumentForUser,
   getAwbFields,
   isAwbUuid,
@@ -9,6 +9,8 @@ import {
   updateAwbFields,
   validateAwbForIssue,
 } from "@/lib/awb/persistence";
+import { parseReviewCheckpoint } from "@/lib/awb/timingMetrics";
+import { awbTimingServerFlags } from "@/lib/features/awbTimingFlags.server";
 
 type FieldUpdate = {
   key: string;
@@ -30,10 +32,25 @@ function normalizeUpdates(value: unknown): FieldUpdate[] {
   return updates.slice(0, 100);
 }
 
+function normalizeIssueClickedAt(value: unknown, requestReceivedAt: string) {
+  if (typeof value !== "string") return requestReceivedAt;
+  const timestamp = Date.parse(value);
+  const receivedTimestamp = Date.parse(requestReceivedAt);
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp > receivedTimestamp + 5_000 ||
+    timestamp < receivedTimestamp - 5 * 60_000
+  ) {
+    return requestReceivedAt;
+  }
+  return new Date(timestamp).toISOString();
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ documentId: string }> }
 ) {
+  const requestReceivedAt = new Date().toISOString();
   const { documentId } = await params;
   if (!isAwbUuid(documentId)) {
     return awbJsonResponse(
@@ -43,6 +60,11 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   const updates = normalizeUpdates(body?.fields);
+  const checkpoint = parseReviewCheckpoint(body?.reviewCheckpoint, "issued");
+  const issueClickedAt = normalizeIssueClickedAt(
+    body?.issueClickedAt,
+    requestReceivedAt
+  );
 
   try {
     const access = await getAwbDocumentForUser(request, documentId);
@@ -58,12 +80,24 @@ export async function POST(
         403
       );
     }
+    if (access.document.status === "issued") {
+      const fieldRows = await getAwbFields(documentId);
+      const issuedExtraction = toAwbExtractionResponse(access.document, fieldRows);
+      return awbJsonResponse({
+        ok: true,
+        message: "AWB was already issued.",
+        data: {
+          ...issuedExtraction,
+          finalizedFieldKeys: issuedExtraction.fields
+            .filter((field) => field.value.trim())
+            .map((field) => field.key),
+          warnings: [],
+        },
+      });
+    }
 
     if (updates.length) {
-      await updateAwbFields(documentId, access.userId, updates, {
-        companyId: access.document.company_id,
-        changeSource: "issue_save",
-      });
+      await updateAwbFields(documentId, access.userId, updates);
     }
     const fieldRows = await getAwbFields(documentId);
     const extraction = toAwbExtractionResponse(access.document, fieldRows);
@@ -85,28 +119,42 @@ export async function POST(
       { ...access.document, status: "issued" },
       fieldRows
     );
+    const issuedSummary = awbTimingServerFlags.trackingEnabled
+      ? buildIssuedTimingSummary({
+          document: access.document,
+          fields: fieldRows,
+          fieldSummary: issuedExtraction.summary,
+          checkpoint,
+          issuedAt: issueClickedAt,
+        })
+      : {
+          ...(access.document.summary &&
+          typeof access.document.summary === "object" &&
+          !Array.isArray(access.document.summary)
+            ? access.document.summary
+            : {}),
+          ...issuedExtraction.summary,
+        };
     await setAwbDocumentIssued(
       documentId,
-      issuedExtraction.summary,
+      issuedSummary,
       access.document.storage_path
     );
-    const awbNumber =
-      issuedExtraction.fields.find((field) => field.key === "awb_number")?.value ||
-      null;
-    await createAwbEvent({
-      documentId,
-      companyId: access.document.company_id,
-      userId: access.userId,
-      eventType: "issued",
-      title: "AWB issued",
-      metadata: { awb_number: awbNumber, status: "issued" },
-    });
+    const finalizedExtraction = toAwbExtractionResponse(
+      {
+        ...access.document,
+        status: "issued",
+        storage_path: null,
+        summary: issuedSummary,
+      },
+      fieldRows
+    );
     return awbJsonResponse({
       ok: true,
       message: "AWB issued successfully.",
       data: {
-        ...issuedExtraction,
-        finalizedFieldKeys: issuedExtraction.fields
+        ...finalizedExtraction,
+        finalizedFieldKeys: finalizedExtraction.fields
           .filter((field) => field.value.trim())
           .map((field) => field.key),
         warnings: validation.warningFields,

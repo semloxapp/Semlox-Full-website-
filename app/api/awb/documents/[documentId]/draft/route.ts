@@ -1,11 +1,13 @@
 import {
   awbJsonResponse,
-  createAwbEvent,
   getAwbDocumentForUser,
   isAwbUuid,
+  recordReviewCheckpoint,
   setAwbDocumentDraft,
   updateAwbFields,
 } from "@/lib/awb/persistence";
+import { parseReviewCheckpoint } from "@/lib/awb/timingMetrics";
+import { awbTimingServerFlags } from "@/lib/features/awbTimingFlags.server";
 
 type FieldUpdate = {
   key: string;
@@ -38,6 +40,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   const updates = normalizeUpdates(body?.fields);
+  const checkpoint = parseReviewCheckpoint(body?.reviewCheckpoint, "draft_saved");
 
   try {
     const access = await getAwbDocumentForUser(request, documentId);
@@ -47,21 +50,21 @@ export async function POST(
         404
       );
     }
-    const updateResult = updates.length
-      ? await updateAwbFields(documentId, access.userId, updates, {
-          companyId: access.document.company_id,
-          changeSource: "draft_save",
-        })
-      : { changedCount: 0 };
+    if (updates.length) {
+      await updateAwbFields(documentId, access.userId, updates);
+    }
     await setAwbDocumentDraft(documentId);
-    await createAwbEvent({
-      documentId,
-      companyId: access.document.company_id,
-      userId: access.userId,
-      eventType: "draft_saved",
-      title: "AWB draft saved",
-      metadata: { status: "draft", changed_field_count: updateResult.changedCount },
-    });
+    if (awbTimingServerFlags.trackingEnabled && checkpoint) {
+      try {
+        await recordReviewCheckpoint(documentId, checkpoint);
+      } catch (error) {
+        console.error("[awb-draft] review checkpoint failed", {
+          documentId,
+          companyId: access.document.company_id,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
     return awbJsonResponse({ ok: true, message: "Draft saved." });
   } catch {
     return awbJsonResponse(
