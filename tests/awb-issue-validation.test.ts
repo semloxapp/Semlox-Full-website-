@@ -39,3 +39,31 @@ test("an empty current required field is rejected", () => {
   const fields = REQUIRED_AWB_FIELD_KEYS.map((key) => field(key, key === "awb_number" ? "" : "value"));
   assert.deepEqual(validateAwbForIssue(fields).invalidFields.map(({ key }) => key), ["awb_number"]);
 });
+
+test("a populated flagged field must be acknowledged before issue", () => {
+  const fields = REQUIRED_AWB_FIELD_KEYS.map((key) => ({
+    ...field(key),
+    needsReview: key === "awb_number",
+    status: key === "awb_number" ? "review" as const : "valid" as const,
+  }));
+  const result = validateAwbForIssue(fields);
+  assert.deepEqual(result.unreviewedFields.map(({ key }) => key), ["awb_number"]);
+  assert.deepEqual(result.invalidFields.map(({ key }) => key), ["awb_number"]);
+});
+
+test("acknowledged populated fields pass review validation", () => {
+  const fields = REQUIRED_AWB_FIELD_KEYS.map((key) => field(key));
+  const result = validateAwbForIssue(fields);
+  assert.deepEqual(result.unreviewedFields, []);
+  assert.deepEqual(result.invalidFields, []);
+});
+
+test("a warning field also requires explicit acknowledgement", () => {
+  const fields = REQUIRED_AWB_FIELD_KEYS.map((key) => ({
+    ...field(key),
+    status: key === "awb_number" ? "warning" as const : "valid" as const,
+    needsReview: false,
+  }));
+  const result = validateAwbForIssue(fields);
+  assert.deepEqual(result.unreviewedFields.map(({ key }) => key), ["awb_number"]);
+});

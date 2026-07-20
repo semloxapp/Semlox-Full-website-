@@ -37,7 +37,10 @@ import {
 import type { AwbExtractedField, AwbExtractionResponse } from "@/lib/awb/types";
 import { replaceSubmittedAwbFieldValue } from "@/lib/awb/finalFieldValues";
 import { calculateFinalQualityMetrics } from "@/lib/awb/finalQualityMetrics";
-import { REQUIRED_AWB_FIELD_KEYS } from "@/lib/awb/fieldRegistry";
+import {
+  awbBrowserPerformanceNow,
+  createAwbBrowserPerformanceId,
+} from "@/lib/awb/browserPerformance";
 import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
@@ -115,13 +118,16 @@ function awbPayloadFromExtraction(extraction: AwbExtractionResponse) {
 }
 
 function validateReviewForIssue(fields: AwbExtractedField[]) {
-  const byKey = new Map(fields.map((field) => [field.key, field]));
-  const invalidKeys = REQUIRED_AWB_FIELD_KEYS.filter((key) => {
-    const field = byKey.get(key);
-    return Boolean(field && !field.value.trim());
-  });
-  const unmappedKeys = REQUIRED_AWB_FIELD_KEYS.filter((key) => !byKey.has(key));
-  return { invalidKeys, unmappedKeys };
+  const unreviewedKeys = fields
+    .filter(
+      (field) =>
+        field.value.trim() &&
+        (field.needsReview ||
+          field.status === "review" ||
+          field.status === "warning")
+    )
+    .map((field) => field.key);
+  return { unreviewedKeys };
 }
 
 const PAPER_PAYLOAD_TO_FIELD_KEY: Record<string, string> = {
@@ -1379,7 +1385,11 @@ function ReviewView({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fields: latestFieldsRef.current.map((field) => ({ key: field.key, value: field.value })),
+          fields: latestFieldsRef.current.map((field) => ({
+            key: field.key,
+            value: field.value,
+            reviewed: field.status === "valid" && !field.needsReview,
+          })),
           reviewCheckpoint: activeReview.prepareCheckpoint("draft_saved"),
         }),
       });
@@ -1441,12 +1451,13 @@ function ReviewView({
   const issueAwb = async () => {
     activeReview.markActivity();
     const validation = validateReviewForIssue(latestFieldsRef.current);
-    if (validation.invalidKeys.length) {
+    if (validation.unreviewedKeys.length) {
       setActionNotice({
         type: "error",
-        message: "Please fill all required fields before issuing.",
+        message:
+          "Review every flagged field by changing it or clicking its tick before issuing.",
       });
-      focusFirstInvalidField(validation.invalidKeys[0]);
+      focusFirstInvalidField(validation.unreviewedKeys[0]);
       return;
     }
     setConfirmIssueOpen(true);
@@ -1463,7 +1474,11 @@ function ReviewView({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fields: latestFieldsRef.current.map((field) => ({ key: field.key, value: field.value })),
+          fields: latestFieldsRef.current.map((field) => ({
+            key: field.key,
+            value: field.value,
+            reviewed: field.status === "valid" && !field.needsReview,
+          })),
           reviewCheckpoint: activeReview.prepareCheckpoint("issued"),
           issueClickedAt,
         }),
@@ -1694,7 +1709,7 @@ function ReviewView({
                   </strong>
                 </div>
                 <div
-                  className="awb-preview-status-chip flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-cyan-400/35 bg-cyan-400/[0.1] px-2.5 text-[11px] font-semibold text-cyan-200"
+                  className="awb-preview-status-chip awb-preview-status-chip-accuracy flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-cyan-400/35 bg-cyan-400/[0.1] px-2.5 text-[11px] font-semibold text-cyan-200"
                   title={`${isIssued ? "Final Field Accuracy" : "Current Field Accuracy"}: unchanged evaluated fields divided by evaluated fields`}
                 >
                   {isIssued
@@ -1705,7 +1720,7 @@ function ReviewView({
                   </strong>
                 </div>
                 <div
-                  className="awb-preview-status-chip flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-fuchsia-400/35 bg-fuchsia-400/[0.1] px-2.5 text-[11px] font-semibold text-fuchsia-200"
+                  className="awb-preview-status-chip awb-preview-status-chip-correction flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-fuchsia-400/35 bg-fuchsia-400/[0.1] px-2.5 text-[11px] font-semibold text-fuchsia-200"
                   title={`${isIssued ? "Final" : "Current"} Correction Rate: changed, added, or cleared evaluated fields`}
                 >
                   Correction
@@ -2104,6 +2119,26 @@ function ReviewView({
           color: #1e3a8a !important;
         }
 
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-accuracy {
+          background-color: #ecfeff !important;
+          border-color: #67e8f9 !important;
+          color: #0e7490 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-accuracy strong {
+          color: #155e75 !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-correction {
+          background-color: #fdf4ff !important;
+          border-color: #e879f9 !important;
+          color: #a21caf !important;
+        }
+
+        .dashboard-theme-light .awb-review-page .awb-preview-status-chip-correction strong {
+          color: #86198f !important;
+        }
+
         .dashboard-theme-light .awb-review-page .awb-preview-toolbar span:first-of-type,
         .dashboard-theme-light .awb-review-page .awb-uploaded-pdf-panel > div:first-child > div {
           color: #111827 !important;
@@ -2238,6 +2273,8 @@ function AwbProcessingPageContent() {
 
   const runExtraction = async (file: File) => {
     const uploadStartedAt = new Date().toISOString();
+    const performanceProfileId = createAwbBrowserPerformanceId();
+    const browserStartedAt = awbBrowserPerformanceNow();
     setExtractionError("");
     setExtraction(null);
     setPhase("processing");
@@ -2245,13 +2282,21 @@ function AwbProcessingPageContent() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("uploadStartedAt", uploadStartedAt);
+      formData.append("performanceProfileId", performanceProfileId);
       if (selectedCompanyId) formData.append("companyId", selectedCompanyId);
       const response = await fetch("/api/awb/extract", {
         method: "POST",
         credentials: "include",
         body: formData,
       });
+      const responseHeadersAt = awbBrowserPerformanceNow();
+      const serverDurationMs = Number(
+        response.headers.get("X-AWB-Server-Duration-Ms")
+      );
+      const serverProfileId = response.headers.get("X-AWB-Performance-Id");
+      const responseParseStartedAt = awbBrowserPerformanceNow();
       const payload = await response.json().catch(() => ({}));
+      const responseParsedAt = awbBrowserPerformanceNow();
       if (!response.ok || payload?.ok === false || !payload?.data) {
         setExtractionError(responseMessage(payload, "AWB extraction failed. Please try again."));
         return;
@@ -2260,6 +2305,42 @@ function AwbProcessingPageContent() {
       setDocumentCanEdit(true);
       setSourceStored(true);
       setPhase("review");
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const paintedAt = awbBrowserPerformanceNow();
+          const fetchToHeadersMs = responseHeadersAt - browserStartedAt;
+          const browserProfile = {
+            clientProfileId: performanceProfileId,
+            serverProfileId,
+            fileBytes: file.size,
+            totalToReviewPaintMs:
+              Math.round((paintedAt - browserStartedAt) * 100) / 100,
+            stagesMs: {
+              fetchUploadServerAndResponseHeaders:
+                Math.round(fetchToHeadersMs * 100) / 100,
+              responseBodyParse:
+                Math.round(
+                  (responseParsedAt - responseParseStartedAt) * 100
+                ) / 100,
+              stateUpdateToReviewPaint:
+                Math.round((paintedAt - responseParsedAt) * 100) / 100,
+            },
+            serverMeasuredMs: Number.isFinite(serverDurationMs)
+              ? serverDurationMs
+              : null,
+            outsideMeasuredServerMs: Number.isFinite(serverDurationMs)
+              ? Math.round((fetchToHeadersMs - serverDurationMs) * 100) / 100
+              : null,
+          };
+          console.info("[awb-performance] browser-profile", browserProfile);
+          void fetch("/api/awb/performance-profile", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(browserProfile),
+          }).catch(() => undefined);
+        });
+      });
     } catch {
       setExtractionError("AWB extraction failed. Please try again.");
     }

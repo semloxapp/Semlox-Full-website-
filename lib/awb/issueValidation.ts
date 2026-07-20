@@ -18,5 +18,27 @@ export function validateAwbForIssue(fields: AwbExtractedField[]) {
   const warningFields = fields
     .filter((field) => field.status === "warning")
     .map((field) => ({ key: field.key, label: field.label }));
-  return { invalidFields, warningFields };
+  const unreviewedFields = fields
+    .filter(
+      (field) =>
+        field.value.trim() &&
+        (field.needsReview ||
+          field.status === "review" ||
+          field.status === "warning")
+    )
+    .map((field) => ({
+      key: field.key,
+      label: field.label,
+      message: "This flagged value has not been reviewed.",
+    }));
+  return {
+    invalidFields: [
+      ...invalidFields,
+      ...unreviewedFields.filter(
+        (field) => !invalidFields.some((invalid) => invalid.key === field.key)
+      ),
+    ],
+    warningFields,
+    unreviewedFields,
+  };
 }

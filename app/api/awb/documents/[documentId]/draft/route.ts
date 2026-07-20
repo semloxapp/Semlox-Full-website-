@@ -12,6 +12,7 @@ import { awbTimingServerFlags } from "@/lib/features/awbTimingFlags.server";
 type FieldUpdate = {
   key: string;
   value: string;
+  reviewed?: boolean;
 };
 
 function normalizeUpdates(value: unknown): FieldUpdate[] {
@@ -22,7 +23,11 @@ function normalizeUpdates(value: unknown): FieldUpdate[] {
       const row = item as Record<string, unknown>;
       const key = typeof row.key === "string" ? row.key.trim() : "";
       if (!/^[a-z0-9_]{1,80}$/.test(key) || typeof row.value !== "string") return [];
-      return [{ key, value: row.value.slice(0, 5000) }];
+      return [{
+        key,
+        value: row.value.slice(0, 5000),
+        reviewed: row.reviewed === true,
+      }];
     })
     .slice(0, 100);
 }

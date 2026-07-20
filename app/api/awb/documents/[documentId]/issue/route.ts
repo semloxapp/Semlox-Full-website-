@@ -16,6 +16,7 @@ import { countCorrectedAwbFieldValues } from "@/lib/awb/finalFieldValues";
 type FieldUpdate = {
   key: string;
   value: string;
+  reviewed?: boolean;
 };
 
 function normalizeUpdates(value: unknown): FieldUpdate[] {
@@ -28,7 +29,11 @@ function normalizeUpdates(value: unknown): FieldUpdate[] {
     const key = typeof row.key === "string" ? row.key.trim() : "";
     if (!/^[a-z0-9_]{1,80}$/.test(key) || seen.has(key) || typeof row.value !== "string") continue;
     seen.add(key);
-    updates.push({ key, value: row.value.slice(0, 5000) });
+    updates.push({
+      key,
+      value: row.value.slice(0, 5000),
+      reviewed: row.reviewed === true,
+    });
   }
   return updates.slice(0, 100);
 }
@@ -105,11 +110,16 @@ export async function POST(
     const extraction = toAwbExtractionResponse(access.document, fieldRows);
     const validation = validateAwbForIssue(extraction.fields);
     if (validation.invalidFields.length) {
+      const missingRequiredFields = validation.invalidFields.filter(
+        (field) => field.message === "Required value is missing."
+      );
       return awbJsonResponse(
         {
           ok: false,
           code: "VALIDATION_FAILED",
-          message: "Please fill all required fields before issuing.",
+          message: missingRequiredFields.length
+            ? `Complete required field${missingRequiredFields.length === 1 ? "" : "s"}: ${missingRequiredFields.map((field) => field.label).join(", ")}.`
+            : "Review every flagged field by changing it or confirming its value before issuing.",
           fields: validation.invalidFields,
           warnings: validation.warningFields,
         },

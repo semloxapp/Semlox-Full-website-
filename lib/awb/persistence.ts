@@ -18,6 +18,7 @@ import {
 } from "./finalFieldValues";
 import { calculateFinalQualityMetrics } from "./finalQualityMetrics";
 import { awbSummaryFromFields } from "./fieldStats";
+import type { AwbPerformanceStageRecorder } from "./performanceProfile";
 import {
   applyReviewCheckpoint,
   asRecord,
@@ -76,10 +77,14 @@ export type FieldRow = {
   edited_at: string | null;
 };
 
-export function awbJsonResponse(body: unknown, status = 200) {
+export function awbJsonResponse(
+  body: unknown,
+  status = 200,
+  headers?: Record<string, string>
+) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 }
 
@@ -191,10 +196,19 @@ export async function createPersistedAwbExtraction(
   file: File,
   rawResponse: unknown = null,
   processingTiming?: ProcessingTimingMetrics,
-  uploadStartedAt?: string
+  uploadStartedAt?: string,
+  recordPerformanceStage?: AwbPerformanceStageRecorder
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
-  const documentResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?select=*`, {
+  const measure = async <T>(stage: string, operation: () => Promise<T>) => {
+    const startedAt = performance.now();
+    try {
+      return await operation();
+    } finally {
+      recordPerformanceStage?.(stage, performance.now() - startedAt);
+    }
+  };
+  const documentResponse = await measure("db_document_insert", () => fetch(`${supabaseUrl}/rest/v1/awb_documents?select=*`, {
     method: "POST",
     headers: serviceHeaders({ Prefer: "return=representation" }),
     body: JSON.stringify({
@@ -212,24 +226,29 @@ export async function createPersistedAwbExtraction(
       summary: extraction.summary,
       raw_response: rawResponse,
     }),
-  });
+  }));
+  const documentJsonStartedAt = performance.now();
   const documentRows = await documentResponse.json().catch(() => []);
+  recordPerformanceStage?.(
+    "db_document_response_parse",
+    performance.now() - documentJsonStartedAt
+  );
   const document = Array.isArray(documentRows) ? (documentRows[0] as DocumentRow | undefined) : undefined;
   if (!documentResponse.ok || !document?.id) throw new Error("Failed to create AWB document");
 
   let storagePath: string | null = null;
   try {
-    storagePath = await uploadAwbSourceFile({
+    storagePath = await measure("storage_source_upload", () => uploadAwbSourceFile({
       companyId: context.companyId,
       userId: context.userId,
       documentId: document.id,
       file,
-    });
-    const storageResponse = await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
+    }));
+    const storageResponse = await measure("db_storage_path_update", () => fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
       method: "PATCH",
       headers: serviceHeaders({ Prefer: "return=minimal" }),
       body: JSON.stringify({ storage_path: storagePath }),
-    });
+    }));
     if (!storageResponse.ok) throw new Error("Failed to update AWB source path");
     document.storage_path = storagePath;
   } catch (error) {
@@ -241,7 +260,7 @@ export async function createPersistedAwbExtraction(
     throw error;
   }
 
-  const fieldResponse = await fetch(`${supabaseUrl}/rest/v1/awb_fields`, {
+  const fieldResponse = await measure("db_fields_insert", () => fetch(`${supabaseUrl}/rest/v1/awb_fields`, {
     method: "POST",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify(
@@ -260,7 +279,7 @@ export async function createPersistedAwbExtraction(
         source: field.source || null,
       }))
     ),
-  });
+  }));
   if (!fieldResponse.ok) {
     await deleteAwbSourceFile(document.storage_path);
     await fetch(`${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`, {
@@ -279,14 +298,14 @@ export async function createPersistedAwbExtraction(
         review_ready_at: reviewReadyAt,
       },
     });
-    const timingResponse = await fetch(
+    const timingResponse = await measure("db_timing_summary_update", () => fetch(
       `${supabaseUrl}/rest/v1/awb_documents?id=eq.${document.id}`,
       {
         method: "PATCH",
         headers: serviceHeaders({ Prefer: "return=minimal" }),
         body: JSON.stringify({ summary: mergedSummary }),
       }
-    );
+    ));
     if (!timingResponse.ok) {
       console.error("[awb-metrics] failed to persist review-ready timing", {
         documentId: document.id,
@@ -675,7 +694,7 @@ export function toAwbExtractionResponse(
 export async function updateAwbFields(
   documentId: string,
   userId: string,
-  updates: Array<{ key: string; value: string }>
+  updates: Array<{ key: string; value: string; reviewed?: boolean }>
 ) {
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const existingRows = await getAwbFields(documentId);
@@ -692,8 +711,26 @@ export async function updateAwbFields(
   for (const update of updates) {
     const existing = byKey.get(update.key);
     const value = update.value.trim();
-    if (!existing || existing.value === value) continue;
-    const status: AwbFieldStatus = value ? "valid" : "missing";
+    if (!existing) continue;
+    const valueChanged = existing.value !== value;
+    const acknowledged = update.reviewed === true || (valueChanged && Boolean(value));
+    const needsReview = value
+      ? acknowledged
+        ? false
+        : existing.needs_review
+      : true;
+    const status: AwbFieldStatus = value
+      ? acknowledged
+        ? "valid"
+        : existing.status
+      : "missing";
+    if (
+      !valueChanged &&
+      existing.needs_review === needsReview &&
+      existing.status === status
+    ) {
+      continue;
+    }
     const response = await fetch(
       `${supabaseUrl}/rest/v1/awb_fields?document_id=eq.${documentId}&key=eq.${encodeURIComponent(update.key)}`,
       {
@@ -701,10 +738,11 @@ export async function updateAwbFields(
         headers: serviceHeaders({ Prefer: "return=minimal" }),
         body: JSON.stringify({
           value,
-          needs_review: !value,
+          needs_review: needsReview,
           status,
-          color: value ? "blue" : "red",
-          comment: value ? "Manually reviewed" : existing.comment,
+          color: value ? (acknowledged ? "blue" : existing.color) : "red",
+          comment:
+            value && acknowledged ? "Manually reviewed" : existing.comment,
           edited_by: userId,
           edited_at: editedAt,
         }),

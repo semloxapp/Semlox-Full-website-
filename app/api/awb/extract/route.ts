@@ -12,6 +12,8 @@ import {
   parseProviderTiming,
   timingMetricsFromSummary,
 } from "@/lib/awb/timingMetrics";
+import { createAwbPerformanceProfiler } from "@/lib/awb/performanceProfile";
+import { saveAwbPerformanceProfilePart } from "@/lib/awb/performanceProfileStore.server";
 import type {
   AwbExtractionMode,
   AwbExtractionResponse,
@@ -74,7 +76,10 @@ function hasProviderEntities(raw: unknown) {
   return Array.isArray(final?.entities) && final.entities.length > 0;
 }
 
-async function callLiveExtraction(file: File) {
+async function callLiveExtraction(
+  file: File,
+  profiler: ReturnType<typeof createAwbPerformanceProfiler>
+) {
   const apiUrl = process.env.AWB_EXTRACTION_API_URL?.trim();
   if (!apiUrl) {
     throw new ProviderError(
@@ -92,17 +97,24 @@ async function callLiveExtraction(file: File) {
   const startedAt = Date.now();
 
   try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      body: providerFormData,
-      headers: apiKey ? { "X-Semlox-Api-Key": apiKey } : undefined,
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    const responseText = await response.text();
+    const response = await profiler.measure("provider_request_to_headers", () =>
+      fetch(apiUrl, {
+        method: "POST",
+        body: providerFormData,
+        headers: apiKey ? { "X-Semlox-Api-Key": apiKey } : undefined,
+        signal: controller.signal,
+        cache: "no-store",
+      })
+    );
+    const responseText = await profiler.measure(
+      "provider_response_body_read",
+      () => response.text()
+    );
     let payload: unknown;
     try {
-      payload = JSON.parse(responseText);
+      payload = profiler.measureSync("provider_response_json_parse", () =>
+        JSON.parse(responseText)
+      );
     } catch {
       throw new ProviderError(
         "AWB_API_BAD_RESPONSE",
@@ -190,14 +202,17 @@ function normalizeUploadStartedAt(value: FormDataEntryValue | null, receivedAt: 
 
 async function getExtraction(
   requestedMode: AwbExtractionMode,
-  file: File
+  file: File,
+  profiler: ReturnType<typeof createAwbPerformanceProfiler>
 ): Promise<{
   normalized: AwbExtractionResponse;
   rawResponse: unknown;
   processingTiming: ReturnType<typeof parseProviderTiming>;
 }> {
   const normalizeTimed = (rawResponse: unknown, resultMode: AwbExtractionMode) => {
-    const normalized = normalizeExtraction(rawResponse, resultMode, file);
+    const normalized = profiler.measureSync("response_normalization", () =>
+      normalizeExtraction(rawResponse, resultMode, file)
+    );
     return {
       normalized,
       rawResponse,
@@ -205,12 +220,15 @@ async function getExtraction(
     };
   };
   if (requestedMode === "mock") {
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await profiler.measure(
+      "provider_request_to_headers",
+      () => new Promise((resolve) => setTimeout(resolve, 450))
+    );
     return normalizeTimed(mockAwbApiResponse, "mock");
   }
 
   try {
-    const rawResponse = await callLiveExtraction(file);
+    const rawResponse = await callLiveExtraction(file, profiler);
     return normalizeTimed(rawResponse, "live");
   } catch (error) {
     if (requestedMode !== "fallback" || !(error instanceof ProviderError)) {
@@ -223,9 +241,14 @@ async function getExtraction(
 }
 
 export async function POST(request: Request) {
+  const serverProfileId = crypto.randomUUID();
+  const profiler = createAwbPerformanceProfiler(serverProfileId);
   const requestReceivedAt = new Date().toISOString();
-  const token = await extractBearerTokenFromRequest(request);
-  if (!token || !(await getUserFromAccessToken(token))?.id) {
+  const initialUser = await profiler.measure("initial_authentication", async () => {
+    const token = await extractBearerTokenFromRequest(request);
+    return token ? getUserFromAccessToken(token) : null;
+  });
+  if (!initialUser?.id) {
     return awbJsonResponse(
       {
         ok: false,
@@ -236,7 +259,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const formData = await request.formData().catch(() => null);
+  const formData = await profiler.measure("multipart_form_parse", () =>
+    request.formData().catch(() => null)
+  );
+  const clientProfileId =
+    typeof formData?.get("performanceProfileId") === "string"
+      ? String(formData.get("performanceProfileId")).slice(0, 80)
+      : null;
   const uploadStartedAt = normalizeUploadStartedAt(
     formData?.get("uploadStartedAt") ?? null,
     requestReceivedAt
@@ -277,7 +306,9 @@ export async function POST(request: Request) {
     typeof formData?.get("companyId") === "string"
       ? String(formData.get("companyId"))
       : null;
-  const access = await authenticateAwbRequest(request, requestedCompanyId);
+  const access = await profiler.measure("company_authorization", () =>
+    authenticateAwbRequest(request, requestedCompanyId)
+  );
   if (!access) {
     return awbJsonResponse(
       {
@@ -300,7 +331,7 @@ export async function POST(request: Request) {
 
   let extractionResult: Awaited<ReturnType<typeof getExtraction>>;
   try {
-    extractionResult = await getExtraction(mode, file);
+    extractionResult = await getExtraction(mode, file, profiler);
   } catch (error) {
     const providerError =
       error instanceof ProviderError
@@ -341,7 +372,8 @@ export async function POST(request: Request) {
       file,
       rawResponse,
       awbTimingServerFlags.trackingEnabled ? processingTiming : undefined,
-      uploadStartedAt
+      uploadStartedAt,
+      profiler.record
     );
     normalized.document.id = document.id;
     normalized.document.status = document.status;
@@ -378,7 +410,57 @@ export async function POST(request: Request) {
       entityCount: normalized.summary.totalFields,
       processingTimeMs: normalized.document.processingTimeMs,
     });
-    return awbJsonResponse({ ok: true, data: normalized }, 200);
+    const responsePayload = { ok: true, data: normalized };
+    const responseBody = profiler.measureSync("response_json_serialize", () =>
+      JSON.stringify(responsePayload)
+    );
+    const profile = profiler.finish();
+    const providerRoundTripMs =
+      (profile.stagesMs.provider_request_to_headers ?? 0) +
+      (profile.stagesMs.provider_response_body_read ?? 0) +
+      (profile.stagesMs.provider_response_json_parse ?? 0);
+    const performanceRecord = {
+      ...profile,
+      clientProfileId,
+      documentId: document.id,
+      fileName: file.name,
+      fileBytes: file.size,
+      responseJsonBytes: Buffer.byteLength(responseBody, "utf8"),
+      providerRoundTripMs,
+      providerReportedMs: {
+        extractor: processingTiming.extractor_ms,
+        llm: processingTiming.llm_ms,
+        businessLogic: processingTiming.business_logic_ms,
+        total: processingTiming.total_ms,
+      },
+      providerTransportAndQueueMs:
+        processingTiming.total_ms === null
+          ? null
+          : Math.max(
+              0,
+              providerRoundTripMs - processingTiming.total_ms
+            ),
+    };
+    console.info("[awb-performance] extraction-profile", performanceRecord);
+    void saveAwbPerformanceProfilePart(
+      clientProfileId ?? serverProfileId,
+      "server",
+      performanceRecord
+    ).catch((error) => {
+      console.error("[awb-performance] profile file write failed", {
+        serverProfileId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    });
+    return new Response(responseBody, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "X-AWB-Performance-Id": serverProfileId,
+        "X-AWB-Server-Duration-Ms": String(profile.totalMeasuredMs),
+        "Server-Timing": `awb_server;dur=${profile.totalMeasuredMs}`,
+      },
+    });
   } catch {
     return awbJsonResponse(
       {

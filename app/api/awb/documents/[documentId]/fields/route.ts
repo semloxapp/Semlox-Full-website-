@@ -8,6 +8,7 @@ import {
 type FieldUpdate = {
   key: string;
   value: string;
+  reviewed?: boolean;
 };
 
 function normalizeUpdates(value: unknown): FieldUpdate[] {
@@ -21,7 +22,11 @@ function normalizeUpdates(value: unknown): FieldUpdate[] {
     const fieldValue = typeof row.value === "string" ? row.value.slice(0, 5000) : "";
     if (!/^[a-z0-9_]{1,80}$/.test(key) || seen.has(key)) continue;
     seen.add(key);
-    updates.push({ key, value: fieldValue });
+    updates.push({
+      key,
+      value: fieldValue,
+      reviewed: row.reviewed === true,
+    });
   }
   return updates.slice(0, 100);
 }
