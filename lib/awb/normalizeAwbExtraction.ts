@@ -7,6 +7,7 @@ import type {
 import { awbSummaryFromFields } from "./fieldStats";
 import { AWB_ENTITY_TYPE_MAP } from "./fieldRegistry";
 import { parseProviderTiming } from "./timingMetrics";
+import { calculateFinalQualityMetrics } from "./finalQualityMetrics";
 
 type RawEntity = {
   type?: unknown;
@@ -74,6 +75,7 @@ function normalizeEntity(entity: RawEntity): AwbExtractedField | null {
   return {
     ...mapping,
     value,
+    originalValue: value,
     rawType,
     confidence,
     confidencePercent: Math.round(confidence * 100),
@@ -121,6 +123,7 @@ export function normalizeAwbExtractionResponse(
     fieldsByKey.set(mapping.key, {
       ...mapping,
       value: "",
+      originalValue: "",
       confidence: 0,
       confidencePercent: 0,
       needsReview: true,
@@ -132,6 +135,14 @@ export function normalizeAwbExtractionResponse(
   const fields = [...fieldsByKey.values()];
 
   const summary = awbSummaryFromFields(fields);
+  const quality = calculateFinalQualityMetrics(
+    fields.map((field) => ({
+      originalValue: field.originalValue,
+      finalValue: field.value,
+      confidence: field.confidence,
+      status: field.status,
+    }))
+  );
   const meta = asRecord(data?.meta);
   const totalMs = parseProviderTiming(raw).total_ms;
   const runId =
@@ -163,6 +174,16 @@ export function normalizeAwbExtractionResponse(
     },
     summary,
     fields,
+    quality: {
+      averageAiConfidencePercent: quality.averageAiConfidencePercent,
+      evaluatedFieldsCount: quality.evaluatedFieldsCount,
+      unchangedFieldsCount: quality.unchangedFieldsCount,
+      correctedFieldsCount: quality.correctedFieldsCount,
+      finalFieldAccuracyPercent: quality.finalFieldAccuracyPercent,
+      correctionRatePercent: quality.correctionRatePercent,
+      fieldCompletionPercent: quality.fieldCompletionPercent,
+      validFieldRatePercent: quality.validFieldRatePercent,
+    },
     meta: {
       runId,
       stages: stages

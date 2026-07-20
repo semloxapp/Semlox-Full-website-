@@ -12,6 +12,10 @@ import type {
 } from "./awb/persistence";
 import type { AwbExtractedField } from "./awb/types";
 import { summarizeAwbFields } from "./awb/persistence";
+import {
+  calculateFinalQualityMetrics,
+  calculateIssuedFinalQualityMetrics,
+} from "./awb/finalQualityMetrics";
 
 type DashboardRange = "7d" | "30d" | "90d";
 type DashboardScope = "user" | "company";
@@ -156,25 +160,44 @@ export async function getDashboardData(
   const fieldSummary = (documentId: string) => {
     const values = fieldsByDocument.get(documentId) || [];
     const summary = summarizeAwbFields(values.map(fieldFromRow));
-    const corrected = values.filter(
-      (field) => String(field.value || "") !== String(field.original_value || "")
-    ).length;
+    const quality = calculateFinalQualityMetrics(
+      values.map((field) => ({
+        originalValue: field.original_value,
+        finalValue: field.value,
+        confidence: field.confidence,
+        status: field.status,
+      }))
+    );
     return {
       total: summary.totalFields,
       captured: summary.capturedFields,
       warnings: summary.needsReview,
-      corrected,
+      corrected: quality.correctedFieldsCount,
     };
   };
 
-  const totalFields = fields.length;
-  const correctedFields = fields.filter(
-    (field) => String(field.value || "") !== String(field.original_value || "")
-  ).length;
-  const avgConfidence = totalFields
-    ? fields.reduce((sum, field) => sum + (Number(field.confidence) || 0), 0) /
-      totalFields
-    : 0;
+  const qualityInput = (inputFields: FieldRow[]) =>
+    inputFields.map((field) => ({
+      originalValue: field.original_value,
+      finalValue: field.value,
+      confidence: field.confidence,
+      status: field.status,
+    }));
+  const allQuality = calculateFinalQualityMetrics(qualityInput(fields));
+  const finalizedQuality = calculateIssuedFinalQualityMetrics(
+    documents,
+    fields.map((field) => ({
+      documentId: field.document_id,
+      originalValue: field.original_value,
+      finalValue: field.value,
+      confidence: field.confidence,
+      status: field.status,
+    }))
+  );
+  const avgConfidence =
+    allQuality.averageAiConfidencePercent === null
+      ? 0
+      : allQuality.averageAiConfidencePercent / 100;
   const processingValues = documents
     .map((document) => Number(document.processing_time_ms) || 0)
     .filter((value) => value > 0);
@@ -255,8 +278,16 @@ export async function getDashboardData(
     failed: statusCount("failed"),
     avgProcessingTimeMs,
     avgConfidence,
-    fieldsCorrected: correctedFields,
-    correctionRate: totalFields ? correctedFields / totalFields : 0,
+    fieldsCorrected: finalizedQuality.correctedFieldsCount,
+    evaluatedFields: finalizedQuality.evaluatedFieldsCount,
+    finalFieldAccuracy:
+      finalizedQuality.finalFieldAccuracyPercent === null
+        ? 0
+        : finalizedQuality.finalFieldAccuracyPercent / 100,
+    correctionRate:
+      finalizedQuality.correctionRatePercent === null
+        ? 0
+        : finalizedQuality.correctionRatePercent / 100,
   };
 
   if (scope === "user") {
@@ -295,7 +326,9 @@ export async function getDashboardData(
           .length,
         failed: userDocuments.filter((document) => document.status === "failed")
           .length,
-        fieldsCorrected: userDocuments.reduce(
+        fieldsCorrected: userDocuments
+          .filter((document) => document.status === "issued")
+          .reduce(
           (sum, document) => sum + fieldSummary(document.id).corrected,
           0
         ),

@@ -12,6 +12,11 @@ import type {
   AwbExtractionResponse,
   AwbFieldStatus,
 } from "./types";
+import {
+  displayAwbFieldValue,
+  verifySubmittedAwbFieldValues,
+} from "./finalFieldValues";
+import { calculateFinalQualityMetrics } from "./finalQualityMetrics";
 import { awbSummaryFromFields } from "./fieldStats";
 import {
   applyReviewCheckpoint,
@@ -58,8 +63,8 @@ export type FieldRow = {
   document_id: string;
   key: string;
   label: string;
-  value: string;
-  original_value: string;
+  value: string | null;
+  original_value: string | null;
   confidence: number | string;
   needs_review: boolean;
   status: AwbFieldStatus;
@@ -405,6 +410,7 @@ export type AwbHistoryDocument = {
     review: number;
     missing: number;
   };
+  quality: AwbExtractionResponse["quality"];
 };
 
 function historyAction(status: DocumentRow["status"]) {
@@ -510,6 +516,14 @@ export async function getAwbHistory(
     const rows = fieldsByDocument.get(document.id) || [];
     const fields = rows.map(fieldFromRow);
     const summary = summarizeAwbFields(fields);
+    const quality = calculateFinalQualityMetrics(
+      rows.map((field) => ({
+        originalValue: field.original_value,
+        finalValue: field.value,
+        confidence: field.confidence,
+        status: field.status,
+      }))
+    );
     const email = usersById.get(document.uploaded_by) || "";
     const name = profilesById.get(document.uploaded_by) || email || "Unknown user";
     return {
@@ -540,6 +554,16 @@ export async function getAwbHistory(
         review: Math.max(0, summary.needsReview - summary.warningFields),
         missing: summary.missingFields,
       },
+      quality: {
+        averageAiConfidencePercent: quality.averageAiConfidencePercent,
+        evaluatedFieldsCount: quality.evaluatedFieldsCount,
+        unchangedFieldsCount: quality.unchangedFieldsCount,
+        correctedFieldsCount: quality.correctedFieldsCount,
+        finalFieldAccuracyPercent: quality.finalFieldAccuracyPercent,
+        correctionRatePercent: quality.correctionRatePercent,
+        fieldCompletionPercent: quality.fieldCompletionPercent,
+        validFieldRatePercent: quality.validFieldRatePercent,
+      },
     };
   });
 }
@@ -560,7 +584,8 @@ function fieldFromRow(row: FieldRow): AwbExtractedField {
   return {
     key: row.key,
     label: row.label,
-    value: row.value,
+    value: displayAwbFieldValue(row),
+    originalValue: row.original_value ?? "",
     confidence,
     confidencePercent: Math.round(confidence * 100),
     needsReview: row.needs_review,
@@ -582,6 +607,14 @@ export function toAwbExtractionResponse(
 ): AwbExtractionResponse {
   const fields = fieldRows.map(fieldFromRow);
   const summary = summarizeAwbFields(fields);
+  const quality = calculateFinalQualityMetrics(
+    fieldRows.map((field) => ({
+      originalValue: field.original_value,
+      finalValue: field.value,
+      confidence: field.confidence,
+      status: field.status,
+    }))
+  );
   const timing = timingMetricsFromSummary(document.summary);
   return {
     ok: true,
@@ -598,6 +631,16 @@ export function toAwbExtractionResponse(
     },
     summary,
     fields,
+    quality: {
+      averageAiConfidencePercent: quality.averageAiConfidencePercent,
+      evaluatedFieldsCount: quality.evaluatedFieldsCount,
+      unchangedFieldsCount: quality.unchangedFieldsCount,
+      correctedFieldsCount: quality.correctedFieldsCount,
+      finalFieldAccuracyPercent: quality.finalFieldAccuracyPercent,
+      correctionRatePercent: quality.correctionRatePercent,
+      fieldCompletionPercent: quality.fieldCompletionPercent,
+      validFieldRatePercent: quality.validFieldRatePercent,
+    },
     meta: {
       runId: document.run_id || undefined,
       totalSeconds: document.processing_time_ms ? document.processing_time_ms / 1000 : undefined,
@@ -637,13 +680,19 @@ export async function updateAwbFields(
   if (!supabaseUrl) throw new Error("AWB persistence service unavailable");
   const existingRows = await getAwbFields(documentId);
   const byKey = new Map(existingRows.map((row) => [row.key, row]));
+  const unknownKeys = updates
+    .map((update) => update.key)
+    .filter((key) => !byKey.has(key));
+  if (unknownKeys.length) {
+    throw new Error("AWB field update contains unknown fields");
+  }
   const editedAt = new Date().toISOString();
   let changedCount = 0;
 
   for (const update of updates) {
     const existing = byKey.get(update.key);
-    if (!existing || existing.value === update.value) continue;
     const value = update.value.trim();
+    if (!existing || existing.value === value) continue;
     const status: AwbFieldStatus = value ? "valid" : "missing";
     const response = await fetch(
       `${supabaseUrl}/rest/v1/awb_fields?document_id=eq.${documentId}&key=eq.${encodeURIComponent(update.key)}`,
@@ -667,6 +716,9 @@ export async function updateAwbFields(
   }
 
   const fields = await getAwbFields(documentId);
+  if (!verifySubmittedAwbFieldValues(updates, fields)) {
+    throw new Error("Failed to verify persisted AWB field values");
+  }
   const normalizedFields = fields.map(fieldFromRow);
   const summary = summarizeAwbFields(normalizedFields);
   const status = summary.needsReview > 0 ? "review_required" : "ready_to_issue";
@@ -685,7 +737,14 @@ export async function updateAwbFields(
     body: JSON.stringify({ summary: mergedSummary, status }),
   });
   if (!documentResponse.ok) throw new Error("Failed to update AWB document");
-  return { fields: normalizedFields, summary, status, changedCount };
+  return {
+    fields: normalizedFields,
+    fieldRows: fields,
+    summary,
+    status,
+    changedCount,
+    persistedCount: updates.length,
+  };
 }
 
 export async function setAwbDocumentDraft(documentId: string) {

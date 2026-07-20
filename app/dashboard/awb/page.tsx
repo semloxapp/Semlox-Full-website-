@@ -35,6 +35,8 @@ import {
   Upload,
 } from "lucide-react";
 import type { AwbExtractedField, AwbExtractionResponse } from "@/lib/awb/types";
+import { replaceSubmittedAwbFieldValue } from "@/lib/awb/finalFieldValues";
+import { calculateFinalQualityMetrics } from "@/lib/awb/finalQualityMetrics";
 import { REQUIRED_AWB_FIELD_KEYS } from "@/lib/awb/fieldRegistry";
 import type {
   PDFDocumentLoadingTask,
@@ -1270,6 +1272,10 @@ function ReviewView({
     () => new Set()
   );
   const [actionNotice, setActionNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const latestFieldsRef = useRef(extraction.fields);
+  useEffect(() => {
+    latestFieldsRef.current = extraction.fields;
+  }, [extraction.fields]);
   const formData = awbPayloadFromExtraction(extraction);
   const processTime = extraction.meta.totalSeconds
     ? `${extraction.meta.totalSeconds.toFixed(1)}s`
@@ -1282,13 +1288,28 @@ function ReviewView({
     isReviewWorkspaceReady
   );
   const awbPreviewReviewStats = getAwbReviewPresentationStats(formData);
+  const currentQuality = calculateFinalQualityMetrics(
+    extraction.fields.map((field) => ({
+      originalValue: field.originalValue,
+      finalValue: field.value,
+      confidence: field.confidence,
+      status: field.status,
+    }))
+  );
+  const qualityPercent = (value: number | null) =>
+    value === null ? "N/A" : `${Math.round(value)}%`;
 
   const updateFieldValue = (key: string, value: string) => {
     if (!canEdit) return;
     activeReview.markActivity();
-    const fields = extraction.fields.map((field) => {
+    const fieldsWithLatestValue = replaceSubmittedAwbFieldValue(
+      latestFieldsRef.current,
+      key,
+      value
+    );
+    const fields = fieldsWithLatestValue.map((field) => {
       if (field.key !== key) return field;
-      const normalizedValue = value;
+      const normalizedValue = field.value;
       return {
         ...field,
         value: normalizedValue,
@@ -1298,6 +1319,7 @@ function ReviewView({
         comment: normalizedValue.trim() ? "Manually reviewed" : field.comment,
       };
     });
+    latestFieldsRef.current = fields;
     onExtractionChange({
       ...extraction,
       fields,
@@ -1320,7 +1342,7 @@ function ReviewView({
     if (!canEdit) return;
     activeReview.markActivity();
     let confirmed = false;
-    const fields = extraction.fields.map((field) => {
+    const fields = latestFieldsRef.current.map((field) => {
       if (field.key !== key) return field;
       confirmed = true;
       return {
@@ -1332,6 +1354,7 @@ function ReviewView({
       };
     });
     if (!confirmed) return;
+    latestFieldsRef.current = fields;
     onExtractionChange({
       ...extraction,
       fields,
@@ -1356,7 +1379,7 @@ function ReviewView({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fields: extraction.fields.map((field) => ({ key: field.key, value: field.value })),
+          fields: latestFieldsRef.current.map((field) => ({ key: field.key, value: field.value })),
           reviewCheckpoint: activeReview.prepareCheckpoint("draft_saved"),
         }),
       });
@@ -1417,7 +1440,7 @@ function ReviewView({
 
   const issueAwb = async () => {
     activeReview.markActivity();
-    const validation = validateReviewForIssue(extraction.fields);
+    const validation = validateReviewForIssue(latestFieldsRef.current);
     if (validation.invalidKeys.length) {
       setActionNotice({
         type: "error",
@@ -1440,7 +1463,7 @@ function ReviewView({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fields: extraction.fields.map((field) => ({ key: field.key, value: field.value })),
+          fields: latestFieldsRef.current.map((field) => ({ key: field.key, value: field.value })),
           reviewCheckpoint: activeReview.prepareCheckpoint("issued"),
           issueClickedAt,
         }),
@@ -1461,7 +1484,9 @@ function ReviewView({
       }
       activeReview.complete();
 
-      onExtractionChange(payload.data as AwbExtractionResponse);
+      const finalizedExtraction = payload.data as AwbExtractionResponse;
+      latestFieldsRef.current = finalizedExtraction.fields;
+      onExtractionChange(finalizedExtraction);
       setIsDirty(false);
       setActionNotice({ type: "success", message: "AWB issued successfully." });
       void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
@@ -1668,6 +1693,26 @@ function ReviewView({
                       : `${awbPreviewReviewStats.averageConfidence}%`}
                   </strong>
                 </div>
+                <div
+                  className="awb-preview-status-chip flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-cyan-400/35 bg-cyan-400/[0.1] px-2.5 text-[11px] font-semibold text-cyan-200"
+                  title={`${isIssued ? "Final Field Accuracy" : "Current Field Accuracy"}: unchanged evaluated fields divided by evaluated fields`}
+                >
+                  {isIssued
+                    ? "Final Field Accuracy"
+                    : "Current Field Accuracy"}
+                  <strong className="font-mono text-[11px] text-cyan-100">
+                    {qualityPercent(currentQuality.finalFieldAccuracyPercent)}
+                  </strong>
+                </div>
+                <div
+                  className="awb-preview-status-chip flex h-[30px] shrink-0 items-center gap-1.5 rounded-[6px] border border-fuchsia-400/35 bg-fuchsia-400/[0.1] px-2.5 text-[11px] font-semibold text-fuchsia-200"
+                  title={`${isIssued ? "Final" : "Current"} Correction Rate: changed, added, or cleared evaluated fields`}
+                >
+                  Correction
+                  <strong className="font-mono text-[11px] text-fuchsia-100">
+                    {qualityPercent(currentQuality.correctionRatePercent)}
+                  </strong>
+                </div>
               </div>
               {reviewView === "form" ? (
                 <button
@@ -1808,6 +1853,87 @@ function ReviewView({
         .dashboard-theme-light .awb-review-page {
           background-color: #f4f7fb !important;
           color: #111827 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-panel {
+          background: #ffffff !important;
+          border-color: #cbd9eb !important;
+          color: #334155 !important;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07) !important;
+        }
+
+        .dashboard-theme-light .awb-timing-title,
+        .dashboard-theme-light .awb-timing-value {
+          color: #0f172a !important;
+        }
+
+        .dashboard-theme-light .awb-timing-toolbar,
+        .dashboard-theme-light .awb-timing-content {
+          border-color: #dbe4f0 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-refresh {
+          background: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          color: #475569 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-refresh:hover {
+          background: #eff6ff !important;
+          border-color: #93b4df !important;
+          color: #1d4ed8 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-node-primary {
+          background: #eff6ff !important;
+          border-color: #a9c7f5 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-node-review {
+          background: #ecfdf5 !important;
+          border-color: #99e2c5 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-node-issue {
+          background: #ecfeff !important;
+          border-color: #99dfea !important;
+        }
+
+        .dashboard-theme-light .awb-timing-label,
+        .dashboard-theme-light .awb-timing-muted,
+        .dashboard-theme-light .awb-timing-note {
+          color: #52647c !important;
+        }
+
+        .dashboard-theme-light .awb-timing-connector {
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-total {
+          color: #087b8c !important;
+        }
+
+        .dashboard-theme-light .awb-timing-table-wrap {
+          background: #ffffff !important;
+          border-color: #cbd5e1 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-table-head {
+          background: #f1f5f9 !important;
+          color: #475569 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-table-row {
+          border-color: #dbe4f0 !important;
+          color: #334155 !important;
+        }
+
+        .dashboard-theme-light .awb-timing-table-row:nth-child(even) {
+          background: #f8fafc !important;
+        }
+
+        .dashboard-theme-light .awb-timing-status {
+          color: #047857 !important;
         }
 
         .dashboard-theme-light .awb-review-page .awb-review-summary {

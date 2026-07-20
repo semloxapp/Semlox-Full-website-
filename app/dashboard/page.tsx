@@ -395,7 +395,7 @@ export default function DashboardPage() {
     { label: "Failed", value: stats.failed || 0, detail: "Processing failures", color: "bg-gradient-to-r from-red-500 to-orange-500", valueClassName: "text-red-300", icon: <XCircle className="h-4 w-4" /> },
     { label: "Avg Processing Time", value: formatDuration(stats.avgProcessingTimeMs || 0), detail: "Completed extraction average", color: "bg-gradient-to-r from-violet-500 to-blue-500", valueClassName: "text-violet-300", icon: <Clock3 className="h-4 w-4" /> },
     { label: "Avg AI Confidence", value: percentage(stats.avgConfidence || 0), detail: "Model confidence, not accuracy", color: "bg-gradient-to-r from-cyan-500 to-blue-500", valueClassName: "text-cyan-300", icon: <Sparkles className="h-4 w-4" /> },
-    { label: "Fields Corrected", value: stats.fieldsCorrected || 0, detail: `${percentage(stats.correctionRate || 0)} correction rate`, color: "bg-gradient-to-r from-fuchsia-500 to-violet-500", valueClassName: "text-fuchsia-300", icon: <WandSparkles className="h-4 w-4" /> },
+    { label: "Final Field Accuracy", value: stats.evaluatedFields ? percentage(stats.finalFieldAccuracy || 0) : "N/A", detail: `${stats.fieldsCorrected || 0} corrected of ${stats.evaluatedFields || 0} evaluated`, color: "bg-gradient-to-r from-fuchsia-500 to-violet-500", valueClassName: "text-fuchsia-300", icon: <WandSparkles className="h-4 w-4" /> },
   ];
 
   return (
@@ -471,16 +471,23 @@ export default function DashboardPage() {
                     blockClassName: "metric-block-cyan border-cyan-400/20 bg-cyan-400/[0.06]",
                   },
                   {
-                    label: "Human Correction Rate",
-                    value: percentage(stats.correctionRate || 0),
-                    description: "Fields changed from the AI original value.",
+                    label: "Final Field Accuracy",
+                    value: stats.evaluatedFields ? percentage(stats.finalFieldAccuracy || 0) : "N/A",
+                    description: "Issued-document fields unchanged from the AI value.",
                     valueClassName: "text-fuchsia-300",
                     blockClassName: "metric-block-rose border-fuchsia-400/20 bg-fuchsia-400/[0.06]",
+                  },
+                  {
+                    label: "Correction Rate",
+                    value: stats.evaluatedFields ? percentage(stats.correctionRate || 0) : "N/A",
+                    description: `${stats.fieldsCorrected || 0} changed of ${stats.evaluatedFields || 0} evaluated issued fields.`,
+                    valueClassName: "text-amber-300",
+                    blockClassName: "border-amber-400/20 bg-amber-400/[0.06]",
                   },
                 ]}
                 footer={
                   <p className="semlox-table-body">
-                    Confidence and human correction are tracked independently.
+                    Final accuracy and correction rate use issued documents only and are complementary.
                   </p>
                 }
               />

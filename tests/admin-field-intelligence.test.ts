@@ -50,9 +50,9 @@ test("field with no valid confidence returns null", () => {
   assert.equal(aggregateFieldGroup("unknown", [row({ confidence: null }), row({ confidence: "bad" }), row({ confidence: -1 }), row({ confidence: 2 })]).averageConfidence, null);
 });
 
-test("accepted difference utility treats whitespace and case changes as current differences", () => {
+test("shared comparison ignores normalized whitespace but preserves case differences", () => {
   const metric = aggregateFieldGroup("value", [row({ value: null, original_value: null }), row({ value: "ABC", original_value: "abc" }), row({ value: "value ", original_value: "value" })]);
-  assert.equal(metric.editedFieldCount, 2);
+  assert.equal(metric.editedFieldCount, 1);
 });
 
 test("field filters and query validation are allowlisted", () => {

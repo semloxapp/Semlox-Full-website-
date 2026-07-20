@@ -1,8 +1,11 @@
+// @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
+import { normalizeAwbComparisonValue } from "../awb/finalQualityMetrics.ts";
+
 export const EDITED_FIELDS_LABEL = "Fields Different from AI Output";
 export const EDITED_FIELDS_TOOLTIP = "Counts fields whose current stored value differs from the original AI-extracted value. This is not a historical correction-event count.";
 
 export function isFieldDifferentFromAiOutput(currentValue: unknown, originalValue: unknown) {
-  return currentValue !== originalValue;
+  return normalizeAwbComparisonValue(currentValue) !== normalizeAwbComparisonValue(originalValue);
 }
 
 export function boundedPercent(part: number, total: number) {

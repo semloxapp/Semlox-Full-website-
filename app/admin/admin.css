@@ -65,3 +65,9 @@
 .admin-agreement-kpi>p strong{color:var(--admin-text-2);font-weight:600}
 @media(max-width:620px){.admin-agreement-kpi>.admin-agreement-score{border-right:0;border-bottom:1px solid var(--admin-border);padding:4px 0 14px}}
 .admin-audit-link{min-height:30px;padding:0 9px;font-size:10px;white-space:nowrap}
+
+/* Popovers need an opaque surface so dashboard content cannot bleed through in dark mode. */
+.admin-shell,.admin-login-page{--admin-popover-bg:#0b1120}
+.admin-theme-light{--admin-popover-bg:#fff}
+.admin-global-filter-popover{background:var(--admin-popover-bg);box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.admin-theme-light .admin-global-filter-grid input,.admin-theme-light .admin-global-filter-grid select{color-scheme:light}

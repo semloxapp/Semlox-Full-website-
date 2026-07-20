@@ -84,6 +84,10 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatQualityPercent(value: number | null) {
+  return value === null ? "N/A" : `${Math.round(value)}%`;
+}
+
 function statusConfig(
   status: HistoryStatus,
 ): { label: string; variant: BadgeProps["variant"] } {
@@ -392,9 +396,6 @@ function DetailPanel({
 }) {
   if (!document) return null;
   const config = statusConfig(document.status);
-  const accuracy = document.fields.total
-    ? Math.round((document.fields.valid / document.fields.total) * 100)
-    : 0;
   return (
     <>
       <div className="history-drawer-header">
@@ -463,9 +464,36 @@ function DetailPanel({
                   <div className="semlox-metadata history-summary-label">Pages</div>
                 </div>
                 <div className="history-summary-item">
-                  <div className="text-lg font-bold text-cyan-400">{accuracy}%</div>
-                  <div className="semlox-metadata history-summary-label">Accuracy</div>
+                  <div className="text-lg font-bold text-cyan-400">
+                    {formatQualityPercent(details.quality.finalFieldAccuracyPercent)}
+                  </div>
+                  <div className="semlox-metadata history-summary-label">
+                    {document.status === "issued"
+                      ? "Final Field Accuracy"
+                      : "Current Field Accuracy"}
+                  </div>
                 </div>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {[
+                  [
+                    "Average AI Confidence",
+                    formatQualityPercent(details.quality.averageAiConfidencePercent),
+                  ],
+                  [
+                    document.status === "issued"
+                      ? "Final Correction Rate"
+                      : "Current Correction Rate",
+                    formatQualityPercent(details.quality.correctionRatePercent),
+                  ],
+                  ["Corrected Fields", String(details.quality.correctedFieldsCount)],
+                  ["Evaluated Fields", String(details.quality.evaluatedFieldsCount)],
+                ].map(([label, value]) => (
+                  <div key={label} className="history-detail-tile">
+                    <div className="semlox-metadata uppercase">{label}</div>
+                    <div className="semlox-table-body mt-1">{value}</div>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -656,6 +684,7 @@ export default function HistoryPage() {
     try {
       const response = await fetch(`/api/awb/documents/${document.id}`, {
         credentials: "include",
+        cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.ok === false) {

@@ -11,6 +11,7 @@ import {
 } from "@/lib/awb/persistence";
 import { parseReviewCheckpoint } from "@/lib/awb/timingMetrics";
 import { awbTimingServerFlags } from "@/lib/features/awbTimingFlags.server";
+import { countCorrectedAwbFieldValues } from "@/lib/awb/finalFieldValues";
 
 type FieldUpdate = {
   key: string;
@@ -50,6 +51,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ documentId: string }> }
 ) {
+  const operationId = crypto.randomUUID();
   const requestReceivedAt = new Date().toISOString();
   const { documentId } = await params;
   if (!isAwbUuid(documentId)) {
@@ -96,10 +98,10 @@ export async function POST(
       });
     }
 
-    if (updates.length) {
-      await updateAwbFields(documentId, access.userId, updates);
-    }
-    const fieldRows = await getAwbFields(documentId);
+    const persistence = updates.length
+      ? await updateAwbFields(documentId, access.userId, updates)
+      : null;
+    const fieldRows = persistence?.fieldRows ?? await getAwbFields(documentId);
     const extraction = toAwbExtractionResponse(access.document, fieldRows);
     const validation = validateAwbForIssue(extraction.fields);
     if (validation.invalidFields.length) {
@@ -135,6 +137,14 @@ export async function POST(
             : {}),
           ...issuedExtraction.summary,
         };
+    const correctedFieldsCount = countCorrectedAwbFieldValues(fieldRows);
+    console.info("[awb-issue] final fields persisted", {
+      operationId,
+      documentId,
+      receivedFieldCount: updates.length,
+      persistedFieldCount: persistence?.persistedCount ?? 0,
+      correctedFieldsCount,
+    });
     await setAwbDocumentIssued(
       documentId,
       issuedSummary,
@@ -160,7 +170,15 @@ export async function POST(
         warnings: validation.warningFields,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("[awb-issue] issue failed", {
+      operationId,
+      documentId,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { name: "UnknownError", message: "Unknown issue failure" },
+    });
     return awbJsonResponse(
       { ok: false, code: "ISSUE_FAILED", message: "Unable to issue the AWB." },
       500

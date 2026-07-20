@@ -6,6 +6,7 @@ export type AwbExtractedField = {
   key: string;
   label: string;
   value: string;
+  originalValue?: string;
   rawType?: string;
   confidence: number;
   confidencePercent: number;
@@ -49,6 +50,16 @@ export type AwbExtractionResponse = {
     missingFields: number;
   };
   fields: AwbExtractedField[];
+  quality: {
+    averageAiConfidencePercent: number | null;
+    evaluatedFieldsCount: number;
+    unchangedFieldsCount: number;
+    correctedFieldsCount: number;
+    finalFieldAccuracyPercent: number | null;
+    correctionRatePercent: number | null;
+    fieldCompletionPercent: number | null;
+    validFieldRatePercent: number | null;
+  };
   meta: {
     runId?: string;
     stages?: Record<string, string>;

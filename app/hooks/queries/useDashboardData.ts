@@ -70,7 +70,7 @@ export async function fetchDashboardDataQuery(
 ) {
   const response = await fetch(
     `/api/dashboard/${scope}?companyId=${encodeURIComponent(companyId)}&range=${range}`,
-    { credentials: "include" }
+    { credentials: "include", cache: "no-store" }
   );
   const payload = (await response.json().catch(() => ({}))) as DashboardPayload;
   if (!response.ok || payload?.ok === false || !payload.data) {

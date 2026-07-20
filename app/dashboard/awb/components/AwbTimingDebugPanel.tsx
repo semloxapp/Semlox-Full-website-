@@ -119,18 +119,18 @@ export function AwbTimingDebugPanel({ extraction, getSnapshot, onRefresh }: {
   ] as const;
 
   return (
-    <section className="rounded-[9px] border border-[#2f80ff]/25 bg-[#2f80ff]/[0.045] text-[#cbd5e1]">
+    <section className="awb-timing-panel rounded-[9px] border border-[#2f80ff]/30 bg-[#081120] text-[#cbd5e1] shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
       <button type="button" onClick={() => setCollapsed((current) => {
         const next = !current;
         sessionStorage.setItem(COLLAPSED_KEY, String(next));
         return next;
       })} aria-expanded={!collapsed} className="flex w-full items-center gap-3 px-4 py-3 text-left">
-        <span className="text-[12px] font-extrabold text-white">Timing Verification — Testing Only</span>
+        <span className="awb-timing-title text-[12px] font-extrabold text-[#f8fafc]">Timing Verification — Testing Only</span>
         <Badge variant="info" size="small" className="text-[8px]">TEST MODE</Badge>
         <span className="ml-auto text-[#94a3b8]">{collapsed ? <ChevronDown size={15}/> : <ChevronUp size={15}/>}</span>
       </button>
       {onRefresh ? (
-        <div className="flex justify-end border-t border-white/[0.06] px-4 py-2">
+        <div className="awb-timing-toolbar flex justify-end border-t border-white/[0.08] px-4 py-2">
           <button
             type="button"
             disabled={refreshing}
@@ -145,7 +145,7 @@ export function AwbTimingDebugPanel({ extraction, getSnapshot, onRefresh }: {
                 setRefreshing(false);
               }
             }}
-            className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-white/10 px-2 text-[9px] font-semibold text-[#94a3b8] hover:border-white/20 hover:text-white disabled:opacity-50"
+            className="awb-timing-refresh inline-flex h-7 items-center gap-1 rounded-[6px] border border-white/15 bg-white/[0.03] px-2 text-[9px] font-semibold text-[#a8b5c8] hover:border-white/25 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
           >
             <RefreshCw size={11} className={refreshing ? "animate-spin" : ""}/>
             {refreshing ? "Refreshing" : "Refresh metrics"}
@@ -153,52 +153,52 @@ export function AwbTimingDebugPanel({ extraction, getSnapshot, onRefresh }: {
         </div>
       ) : null}
       {!collapsed ? (
-        <div className="border-t border-white/[0.08] px-4 py-3">
+        <div className="awb-timing-content border-t border-white/[0.08] px-4 py-3">
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[920px] grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-center gap-2">
-              <div className="rounded-[8px] border border-[#2f80ff]/25 bg-[#2f80ff]/[0.07] p-3">
-                <div className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#64748b]">Upload Started</div>
-                <div className="mt-1 text-[10px] font-semibold text-white">{formatTimestamp(uploadStartedAt)}</div>
+              <div className="awb-timing-node awb-timing-node-primary rounded-[8px] border border-[#3b82f6]/35 bg-[#2563eb]/10 p-3">
+                <div className="awb-timing-label text-[8px] font-bold uppercase tracking-[0.12em] text-[#8ea3bf]">Upload Started</div>
+                <div className="awb-timing-value mt-1 text-[10px] font-semibold text-[#f8fafc]">{formatTimestamp(uploadStartedAt)}</div>
               </div>
-              <div className="text-center text-[#64748b]">
+              <div className="awb-timing-connector text-center text-[#8ea3bf]">
                 <div className="text-[16px]">→</div>
                 <div className="whitespace-nowrap text-[8px]">System overhead {formatDuration(systemOverheadMs)}</div>
               </div>
-              <div className="rounded-[8px] border border-[#2f80ff]/25 bg-[#2f80ff]/[0.07] p-3">
-                <div className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#64748b]">Automated Processing</div>
-                <div className="mt-1 font-mono text-[17px] font-extrabold text-white">{formatDuration(timing?.processing.totalMs)}</div>
+              <div className="awb-timing-node awb-timing-node-primary rounded-[8px] border border-[#3b82f6]/35 bg-[#2563eb]/10 p-3">
+                <div className="awb-timing-label text-[8px] font-bold uppercase tracking-[0.12em] text-[#8ea3bf]">Automated Processing</div>
+                <div className="awb-timing-value mt-1 font-mono text-[17px] font-extrabold text-[#f8fafc]">{formatDuration(timing?.processing.totalMs)}</div>
               </div>
-              <div className="text-center text-[#64748b]">
+              <div className="awb-timing-connector text-center text-[#8ea3bf]">
                 <div className="text-[16px]">→</div>
                 <div className="whitespace-nowrap text-[8px]">Review ready</div>
               </div>
-              <div className="rounded-[8px] border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+              <div className="awb-timing-node awb-timing-node-review rounded-[8px] border border-emerald-400/30 bg-emerald-400/[0.08] p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#64748b]">Active Review</div>
+                  <div className="awb-timing-label text-[8px] font-bold uppercase tracking-[0.12em] text-[#8ea3bf]">Active Review</div>
                   <Badge variant={status.variant}>{status.label}</Badge>
                 </div>
-                <div className="mt-1 font-mono text-[17px] font-extrabold text-white">{formatDuration(displayedActiveMs)}</div>
-                <div className="mt-1 text-[8px] text-[#64748b]">Waiting/paused {formatDuration(reviewWaitMs)}</div>
+                <div className="awb-timing-value mt-1 font-mono text-[17px] font-extrabold text-[#f8fafc]">{formatDuration(displayedActiveMs)}</div>
+                <div className="awb-timing-muted mt-1 text-[8px] text-[#8ea3bf]">Waiting/paused {formatDuration(reviewWaitMs)}</div>
               </div>
-              <div className="text-center text-[#64748b]">
+              <div className="awb-timing-connector text-center text-[#8ea3bf]">
                 <div className="text-[16px]">→</div>
                 <div className="whitespace-nowrap text-[8px]">Issue click</div>
               </div>
-              <div className="rounded-[8px] border border-cyan-400/20 bg-cyan-400/[0.06] p-3">
-                <div className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#64748b]">Issue Clicked</div>
-                <div className="mt-1 text-[10px] font-semibold text-white">{formatTimestamp(issueClickedAt)}</div>
-                <div className="mt-1 font-mono text-[13px] font-bold text-cyan-200">Total {formatDuration(uploadToIssueMs)}</div>
+              <div className="awb-timing-node awb-timing-node-issue rounded-[8px] border border-cyan-400/30 bg-cyan-400/[0.08] p-3">
+                <div className="awb-timing-label text-[8px] font-bold uppercase tracking-[0.12em] text-[#8ea3bf]">Issue Clicked</div>
+                <div className="awb-timing-value mt-1 text-[10px] font-semibold text-[#f8fafc]">{formatTimestamp(issueClickedAt)}</div>
+                <div className="awb-timing-total mt-1 font-mono text-[13px] font-bold text-cyan-200">Total {formatDuration(uploadToIssueMs)}</div>
               </div>
             </div>
           </div>
 
-          <div className="mt-3 overflow-hidden rounded-[7px] border border-white/[0.08]">
-            <table className="w-full text-left text-[9px]">
-              <thead className="bg-white/[0.04] text-[#94a3b8]"><tr><th className="px-3 py-2">Processing Stage</th><th className="px-3 py-2 text-right">Duration</th><th className="px-3 py-2">Status</th></tr></thead>
-              <tbody>{stages.map(([label, value]) => <tr key={label} className="border-t border-white/[0.06]"><td className="px-3 py-2">{label}</td><td className="px-3 py-2 text-right font-mono text-white">{formatDuration(value)}</td><td className="px-3 py-2">{value === null || value === undefined ? "N/A" : "Available"}</td></tr>)}</tbody>
+          <div className="awb-timing-table-wrap mt-3 overflow-hidden rounded-[7px] border border-white/[0.1]">
+            <table className="awb-timing-table w-full text-left text-[9px]">
+              <thead className="awb-timing-table-head bg-white/[0.05] text-[#a8b5c8]"><tr><th className="px-3 py-2">Processing Stage</th><th className="px-3 py-2 text-right">Duration</th><th className="px-3 py-2">Status</th></tr></thead>
+              <tbody>{stages.map(([label, value]) => <tr key={label} className="awb-timing-table-row border-t border-white/[0.08]"><td className="px-3 py-2">{label}</td><td className="awb-timing-value px-3 py-2 text-right font-mono text-[#f8fafc]">{formatDuration(value)}</td><td className="awb-timing-status px-3 py-2">{value === null || value === undefined ? "N/A" : "Available"}</td></tr>)}</tbody>
             </table>
           </div>
-          <p className="mt-2 text-[9px] text-[#64748b]">
+          <p className="awb-timing-note mt-2 text-[9px] text-[#8ea3bf]">
             Total ends at the Issue AWB click; issue processing is excluded. Testing feature — timing display may be removed in production.
           </p>
         </div>

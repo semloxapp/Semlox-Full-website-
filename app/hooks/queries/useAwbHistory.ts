@@ -38,6 +38,7 @@ export type HistoryDocument = {
     review: number;
     missing: number;
   };
+  quality: AwbExtractionResponse["quality"];
 };
 export type HistoryResponse = {
   scope: HistoryScope;
@@ -110,6 +111,7 @@ export async function fetchAwbHistoryQuery(filters: HistoryFilters) {
 
   const response = await fetch(`/api/awb/history?${params.toString()}`, {
     credentials: "include",
+    cache: "no-store",
   });
   const payload = (await response.json().catch(() => ({}))) as HistoryPayload;
   if (!response.ok || payload?.ok === false || !payload.data) {
